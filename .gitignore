@@ -1,0 +1,17 @@
+CLAUDE.local.md
+
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# Local environment and data
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+
+# OS / editor
+.DS_Store
+Thumbs.db
