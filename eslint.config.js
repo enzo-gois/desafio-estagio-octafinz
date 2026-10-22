@@ -16,6 +16,51 @@ export default defineConfig(
       ],
     },
   },
+  {
+    // Dependencies point inward: the domain imports no framework, infra or outer layer.
+    files: ['apps/api/src/domain/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@simulador/shared',
+              allowTypeImports: true,
+              message: 'O domínio só pode importar tipos do shared (use import type).',
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                'fastify',
+                'fastify/*',
+                '@fastify/*',
+                '@prisma/*',
+                'pino',
+                'pino-*',
+                'zod',
+                'zod/*',
+                'node:*',
+              ],
+              message: 'O domínio não depende de framework, infraestrutura ou runtime.',
+            },
+            {
+              group: [
+                '**/application',
+                '**/application/*',
+                '**/infra',
+                '**/infra/*',
+                '**/http',
+                '**/http/*',
+              ],
+              message: 'O domínio não importa camadas externas (application, infra, http).',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Must stay last: turns off rules that conflict with Prettier formatting.
   prettier,
 );
