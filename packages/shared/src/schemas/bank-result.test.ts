@@ -49,6 +49,17 @@ describe('bankResultSchema', () => {
     expect(bankResultSchema.parse(denied)).toEqual(denied);
   });
 
+  it('accepts the number of attempts, including 0 for an open circuit', () => {
+    expect(bankResultSchema.safeParse({ ...approved, attempts: 2 }).success).toBe(true);
+    expect(
+      bankResultSchema.safeParse({ bankId: 'gama', status: 'UNAVAILABLE', attempts: 0 }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a fractional number of attempts', () => {
+    expect(bankResultSchema.safeParse({ ...approved, attempts: 1.5 }).success).toBe(false);
+  });
+
   it('narrows the type by status', () => {
     const result = bankResultSchema.parse(approved);
 

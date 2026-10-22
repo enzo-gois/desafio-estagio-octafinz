@@ -23,6 +23,8 @@ const bankResultBase = {
   bankId: z.string().min(1),
   reason: z.string().optional(),
   latencyMs: z.number().int().nonnegative().optional(),
+  // HTTP attempts made for this bank (0 when the circuit breaker refused the call outright).
+  attempts: z.number().int().nonnegative().optional(),
 };
 
 // Discriminated by status: APPROVED always carries an offer and no other status can.
