@@ -39,3 +39,19 @@ A melhor oferta é a de **menor taxa mensal** entre as aprovadas, incluindo cont
 parcela não é critério: uma contraproposta tem parcela menor só porque empresta menos dinheiro.
 Desempates, em ordem: valor integral antes de contraproposta, maior valor aprovado e, por fim,
 `bankId` em ordem alfabética (resultado independente da ordem de chegada das respostas).
+
+### Retry: lista de permissão e Retry-After exato
+
+Só se tenta de novo o que está numa **lista de permissão** de falhas transitórias: timeout da
+tentativa, erro de rede e os status 502, 503 e 504. Qualquer outro resultado — inclusive um tipo
+de falha criado no futuro — não é repetido até alguém decidir que deve ser.
+
+Sem `Retry-After`, a espera é um backoff exponencial com _full jitter_. Com `Retry-After`, a
+espera é **exatamente** o valor pedido pelo banco, desde que caiba no tempo restante da consulta.
+
+### Melhoria planejada: jitter sobre o Retry-After
+
+Se muitos clientes recebem o mesmo `Retry-After: 2` ao mesmo tempo, todos voltam juntos dois
+segundos depois e podem derrubar o banco de novo. A melhoria é somar um pequeno jitter ao valor
+pedido (por exemplo, até 10% a mais), **nunca menos** que o `Retry-After`, para respeitar o banco
+e ainda assim espalhar as tentativas.
