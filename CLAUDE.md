@@ -40,7 +40,12 @@ interface BankResult {
 
 interface BankProvider {
   readonly id: string;
-  simulate(input: SimulationInput, signal: AbortSignal): Promise<BankResult>;
+  // context.simulationId compõe o Idempotency-Key (simulationId:bankId), igual em todas as tentativas.
+  simulate(
+    input: SimulationInput,
+    signal: AbortSignal,
+    context: { simulationId: string },
+  ): Promise<BankResult>;
 }
 ```
 
