@@ -31,4 +31,28 @@ describe('bankResultSchema', () => {
 
     expect(bankResultSchema.safeParse({ ...approved, offer }).success).toBe(false);
   });
+
+  it('rejects an approved result without an offer', () => {
+    expect(bankResultSchema.safeParse({ bankId: 'alfa', status: 'APPROVED' }).success).toBe(false);
+  });
+
+  it.each(['PENDING', 'DENIED', 'UNAVAILABLE', 'ERROR'])(
+    'rejects an offer on a %s result',
+    (status) => {
+      expect(bankResultSchema.safeParse({ ...approved, status }).success).toBe(false);
+    },
+  );
+
+  it('accepts a denied result with a reason', () => {
+    const denied = { bankId: 'beta', status: 'DENIED', reason: 'Vínculo não atendido' };
+
+    expect(bankResultSchema.parse(denied)).toEqual(denied);
+  });
+
+  it('narrows the type by status', () => {
+    const result = bankResultSchema.parse(approved);
+
+    // Compiles only because APPROVED guarantees `offer`.
+    if (result.status === 'APPROVED') expect(result.offer.amountCents).toBe(1_000_000);
+  });
 });
