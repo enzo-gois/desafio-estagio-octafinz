@@ -19,3 +19,13 @@ export function isValidCpf(value: string): boolean {
 
   return dv1 === digits[9] && dv2 === digits[10];
 }
+
+/**
+ * "52998224725" -> "***.982.247-**": keeps only the middle six digits, enough for the customer
+ * to recognize their own simulation, not enough to identify or look up the person.
+ */
+export function maskCpf(value: string): string {
+  const cpf = normalizeCpf(value);
+  if (!CPF_PATTERN.test(cpf)) throw new RangeError('maskCpf expects an 11-digit CPF');
+  return `***.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-**`;
+}

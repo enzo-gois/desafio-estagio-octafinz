@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { isValidCpf, normalizeCpf } from './cpf';
+import { isValidCpf, maskCpf, normalizeCpf } from './cpf';
+
+describe('maskCpf', () => {
+  it('keeps only the six middle digits', () => {
+    expect(maskCpf('52998224725')).toBe('***.982.247-**');
+    expect(maskCpf('529.982.247-25')).toBe('***.982.247-**');
+  });
+
+  it('refuses anything that is not 11 digits', () => {
+    expect(() => maskCpf('5299822472')).toThrow(RangeError);
+  });
+});
 
 describe('normalizeCpf', () => {
   it('strips only ".", "-" and spaces', () => {

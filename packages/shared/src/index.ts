@@ -1,5 +1,5 @@
 export { isValidCnpj, normalizeCnpj } from './documents/cnpj';
-export { isValidCpf, normalizeCpf } from './documents/cpf';
+export { isValidCpf, maskCpf, normalizeCpf } from './documents/cpf';
 
 export * from './schemas/bank-result';
 export * from './schemas/document';
