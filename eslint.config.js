@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
+import reactHooks from 'eslint-plugin-react-hooks';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
@@ -78,6 +79,16 @@ export default defineConfig(
           ],
         },
       ],
+    },
+  },
+  {
+    files: ['apps/web/**/*.{ts,tsx}'],
+    ...reactHooks.configs.flat.recommended,
+    rules: {
+      ...reactHooks.configs.flat.recommended.rules,
+      // An effect with a missing dependency keeps polling with stale state: an error, not a
+      // warning that `eslint .` would let through.
+      'react-hooks/exhaustive-deps': 'error',
     },
   },
   // Must stay last: turns off rules that conflict with Prettier formatting.
