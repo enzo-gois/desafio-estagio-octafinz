@@ -54,15 +54,16 @@ espera é **exatamente** o valor pedido pelo banco, desde que caiba no tempo res
 O `SimulationInput` completo existe **só em memória**, durante a consulta aos bancos. No banco de
 dados ficam apenas:
 
-| Dado                                                  | Gravado?            | Por quê                                                                        |
-| ----------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------ |
-| CPF                                                   | Só mascarado        | `***.982.247-**` permite ao cliente reconhecer a simulação, não identificá-lo  |
-| Nome, e-mail, nascimento, vínculo, CNPJ do empregador | Não                 | Só os bancos usam                                                              |
-| Salário líquido                                       | Não                 | —                                                                              |
-| Margem e parcela estimadas                            | Sim, nunca expostas | Junto com o percentual revelam o salário exato: não saem no `GET` nem nos logs |
-| Valor pedido e parcelas                               | Sim                 | Identificar contraproposta e mostrar o resultado                               |
-| Momento e versão do consentimento                     | Sim                 | Comprovar a base legal da consulta e a qual texto o cliente concordou          |
-| Resultados dos bancos                                 | Sim                 | É o produto                                                                    |
+| Dado                                    | Gravado?            | Por quê                                                                        |
+| --------------------------------------- | ------------------- | ------------------------------------------------------------------------------ |
+| CPF                                     | Só mascarado        | `***.982.247-**` permite ao cliente reconhecer a simulação, não identificá-lo  |
+| Nome e e-mail                           | Não                 | Exigidos pelo enunciado, mas nenhum banco os recebe: validados e descartados   |
+| Nascimento, vínculo, CNPJ do empregador | Não                 | Só os bancos usam                                                              |
+| Salário líquido                         | Não                 | —                                                                              |
+| Margem e parcela estimadas              | Sim, nunca expostas | Junto com o percentual revelam o salário exato: não saem no `GET` nem nos logs |
+| Valor pedido e parcelas                 | Sim                 | Identificar contraproposta e mostrar o resultado                               |
+| Momento e versão do consentimento       | Sim                 | Comprovar a base legal da consulta e a qual texto o cliente concordou          |
+| Resultados dos bancos                   | Sim                 | É o produto                                                                    |
 
 O `GET /simulations/:id` não tem autenticação: o UUID aleatório é a única chave. Por isso ele
 devolve, da avaliação de margem, **só** `fitsMargin`. Margem, parcela estimada ou percentual de
@@ -71,6 +72,49 @@ pública; um teste garante que salários diferentes produzem respostas idêntica
 
 Logs: sem corpo de requisição, sem IP do cliente, com `redact` do pino para CPF, nome, e-mail,
 nascimento, salário, CNPJ e margem. O `simulationId` liga os logs da requisição aos dos bancos.
+
+### Consentimento: quais dados vão para quais bancos
+
+O formulário monta o texto do consentimento a partir de `GET /banks`, que devolve a versão vigente
+do texto (`CONSENT_VERSION`) e, por banco, o nome e os campos que ele recebe:
+
+| Banco      | Recebe                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Banco Alfa | CPF, data de nascimento, tipo de vínculo (se informado), CNPJ do empregador, salário líquido, valor pedido, número de parcelas |
+| Banco Beta | Os mesmos dados do Banco Alfa                                                                                                  |
+| Banco Gama | Os mesmos, sem o tipo de vínculo (o contrato do Gama não tem esse campo)                                                       |
+
+Nome e e-mail não vão para nenhum banco e não são gravados.
+
+- **A lista é declarada por cada adapter**, ao lado do `toRequestBody`. Um teste confere a
+  declaração pelo comportamento: muda um campo por vez e verifica se o corpo enviado ao banco muda.
+  Campo enviado e não declarado, ou declarado e não enviado, quebra a suíte.
+- **O front devolve a versão do texto que mostrou** (`consentVersion`) e o schema só aceita a
+  vigente. Uma aba aberta antes de um deploy que mudou o texto recebe 400 pedindo para recarregar,
+  em vez de gravar o aceite de um texto que o cliente não leu.
+- **Mudar o nome de um banco ou seus campos exige versão nova.** Um teste guarda a declaração de
+  cada versão e falha se a declaração mudar sem versão nova. Protege contra esquecimento, não contra
+  má-fé: nada impede editar a entrada de uma versão já publicada.
+
+### Hora do servidor e nome dos bancos vêm da API
+
+- **`serverTime` no `GET /simulations/:id`.** O tempo decorrido de um banco que ainda não respondeu
+  é medido contra o relógio do servidor, o mesmo que gravou `createdAt`. O front calcula, a cada
+  resposta, a diferença entre o relógio do servidor e o do navegador, que pode estar minutos errado.
+- **`bankName` em cada resultado**, vindo do registro de bancos da API. O front não tem lista de
+  bancos: adicionar um banco continua sendo adapter + registro (e uma versão nova do
+  consentimento). Um banco removido do registro aparece pelo id nas simulações antigas.
+
+### Proposta planejada: link da simulação por e-mail
+
+O e-mail é exigido pelo enunciado, mas hoje é só validado e descartado. Uso planejado: enviar ao
+cliente o link de `/simulacoes/:id`, para ele voltar ao resultado depois ou em outro dispositivo,
+com o link expirando junto com a retenção dos dados (também planejada). Exige:
+
+- guardar o e-mail só até o envio (fila que apaga o endereço depois de entregar);
+- uma versão nova do consentimento dizendo esse uso;
+- aceitar que o link dá acesso ao resultado sem autenticação, como já acontece com quem tem o
+  UUID: por isso o `GET` não devolve nada pessoal além do CPF mascarado.
 
 ### PENDING nunca fica para sempre (decisão E3)
 
