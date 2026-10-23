@@ -4,17 +4,32 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "prisma generate",
+    "dev": "tsx watch src/main.ts",
+    "build": "prisma generate && tsup",
+    "start": "node dist/main.js",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.1",
+    "@fastify/helmet": "^13.2.0",
+    "@fastify/rate-limit": "^11.2.1",
+    "@prisma/adapter-better-sqlite3": "7.10.1",
+    "@prisma/client": "7.10.1",
     "@simulador/shared": "*",
+    "fastify": "^5.12.7",
     "pino": "^10.4.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@simulador/mock-banks": "*",
-    "@types/node": "^24.19.2"
+    "@types/node": "^24.19.2",
+    "prisma": "7.10.1",
+    "tsup": "^9.0.0",
+    "tsx": "^4.23.15"
   }
 }

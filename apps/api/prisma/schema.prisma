@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// One simulation request. Personal data is kept to the minimum (see README, "Dados pessoais
+/// gravados"): no name, e-mail, birth date, employer or salary; the CPF only masked.
+model Simulation {
+  id                        String   @id
+  createdAt                 DateTime @map("created_at")
+  consentedAt               DateTime @map("consented_at")
+  consentVersion            String   @map("consent_version")
+  requestedAmountCents      Int      @map("requested_amount_cents")
+  installments              Int
+  cpfMasked                 String   @map("cpf_masked")
+  /// Margin assessment (informative only). marginCents together with marginPercent gives the
+  /// exact salary: stored, but never returned by the API nor logged.
+  marginPercent             Int      @map("margin_percent")
+  marginReferenceRate       Float    @map("margin_reference_rate")
+  marginCents               Int      @map("margin_cents")
+  estimatedInstallmentCents Int      @map("estimated_installment_cents")
+  fitsMargin                Boolean  @map("fits_margin")
+  commitmentBps             Int?     @map("commitment_bps")
+
+  results SimulationBankResult[]
+
+  @@index([createdAt])
+  @@map("simulations")
+}
+
+/// One row per bank, so concurrent answers update different rows and never overwrite each
+/// other. A row only leaves PENDING once (conditional update): the first final result wins.
+model SimulationBankResult {
+  simulationId     String   @map("simulation_id")
+  bankId           String   @map("bank_id")
+  /// PENDING | APPROVED | DENIED | UNAVAILABLE | ERROR (validated with Zod on read)
+  status           String
+  reason           String?
+  /// Offer columns: all set when APPROVED, all null otherwise.
+  amountCents      Int?     @map("amount_cents")
+  installments     Int?
+  monthlyRate      Float?   @map("monthly_rate")
+  installmentCents Int?     @map("installment_cents")
+  latencyMs        Int?     @map("latency_ms")
+  attempts         Int?
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  simulation Simulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+
+  @@id([simulationId, bankId])
+  @@index([status])
+  @@map("simulation_bank_results")
+}

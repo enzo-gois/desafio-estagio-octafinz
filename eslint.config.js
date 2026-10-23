@@ -13,7 +13,7 @@ const MOCK_BANKS_RESTRICTION = {
 };
 
 export default defineConfig(
-  { ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**'] },
+  { ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'apps/api/src/generated/**'] },
   js.configs.recommended,
   tseslint.configs.strict,
   {
