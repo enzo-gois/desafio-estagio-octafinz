@@ -1,4 +1,4 @@
-import { CONSENT_VERSION, maskCpf, type SimulationInput } from '@simulador/shared';
+import { maskCpf, type SimulationInput } from '@simulador/shared';
 import { assessMargin, type MarginPolicy } from '../domain/margin';
 import type { Clock } from './ports/clock';
 import type { SimulationRepository } from './ports/simulation-repository';
@@ -55,7 +55,8 @@ export class CreateSimulation {
       id,
       createdAt: now,
       consentedAt: now,
-      consentVersion: CONSENT_VERSION,
+      // The version the customer's form showed; the schema only accepts the current one.
+      consentVersion: input.consentVersion,
       requestedAmountCents: input.requestedAmountCents,
       installments: input.installments,
       cpfMasked: maskCpf(input.cpf),

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { bankResultBaseShape, bankResultStatusSchema, offerSchema } from './bank-result';
+import { CONSENT_VERSION } from './consent';
 import { cnpjSchema, cpfSchema } from './document';
 import { centsSchema } from './money';
 
@@ -11,11 +12,8 @@ export const MAX_INSTALLMENTS = 96;
 // R$ 1.000.000,00. Also keeps every amount inside the 32-bit integer columns of the database.
 export const MAX_AMOUNT_CENTS = 100_000_000;
 
-/**
- * Version of the consent text the front shows next to the checkbox. Stored with the moment
- * of consent, so it is always known which text the customer agreed to.
- */
-export const CONSENT_VERSION = '2026-10-v1';
+export const STALE_CONSENT_MESSAGE =
+  'Os termos de consentimento foram atualizados. Recarregue a página para ler a nova versão.';
 
 export const employmentTypeSchema = z.enum(EMPLOYMENT_TYPES, {
   error: 'Tipo de vínculo inválido',
@@ -47,6 +45,10 @@ export const simulationInputSchema = z.object({
   requestedAmountCents: cappedCentsSchema,
   installments: installmentsSchema,
   consent: z.literal(true, { error: 'É necessário autorizar a consulta aos bancos' }),
+  // The version of the text the customer read. A tab opened before a deploy that changed the
+  // text sends the old one and is asked to reload, instead of recording consent to a text
+  // the customer never saw.
+  consentVersion: z.literal(CONSENT_VERSION, { error: STALE_CONSENT_MESSAGE }),
 });
 
 // Response of POST /simulations (202).

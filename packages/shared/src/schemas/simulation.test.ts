@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_AMOUNT_CENTS, simulationInputSchema, simulationViewSchema } from './simulation';
+import { CONSENT_VERSION } from './consent';
+import {
+  MAX_AMOUNT_CENTS,
+  STALE_CONSENT_MESSAGE,
+  simulationInputSchema,
+  simulationViewSchema,
+} from './simulation';
 
 const validInput = {
   name: 'Maria Silva',
@@ -12,6 +18,7 @@ const validInput = {
   requestedAmountCents: 1_000_000,
   installments: 48,
   consent: true,
+  consentVersion: CONSENT_VERSION,
 };
 
 const issuesFor = (input: unknown) => {
@@ -72,6 +79,17 @@ describe('simulationInputSchema', () => {
     const { consent: _omitted, ...input } = validInput;
 
     expect(issuesFor(input)).toEqual(['consent']);
+  });
+
+  it.each([
+    ['an older consent version', { ...validInput, consentVersion: '2026-09-v1' }],
+    ['no consent version', (({ consentVersion: _omitted, ...rest }) => rest)(validInput)],
+  ])('asks to reload the page for %s', (_, input) => {
+    const result = simulationInputSchema.safeParse(input);
+
+    expect(result.error?.issues).toMatchObject([
+      { path: ['consentVersion'], message: STALE_CONSENT_MESSAGE },
+    ]);
   });
 
   it.each(['netSalaryCents', 'requestedAmountCents'])(

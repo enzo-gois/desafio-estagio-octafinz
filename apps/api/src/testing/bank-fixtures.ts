@@ -1,4 +1,4 @@
-import type { SimulationInput } from '@simulador/shared';
+import { CONSENT_VERSION, type SimulationInput } from '@simulador/shared';
 import type { BankEndpointConfig, BankId } from '../infra/banks/bank-config';
 import type { HttpOutcome, HttpRequest, HttpSender } from '../infra/http/resilient-http-client';
 
@@ -14,6 +14,7 @@ export const CUSTOMER: SimulationInput = {
   requestedAmountCents: 1_000_000,
   installments: 48,
   consent: true,
+  consentVersion: CONSENT_VERSION,
 };
 
 export const CONTEXT = { simulationId: 'sim-42' };

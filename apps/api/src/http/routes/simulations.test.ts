@@ -1,4 +1,4 @@
-import { simulationViewSchema } from '@simulador/shared';
+import { STALE_CONSENT_MESSAGE, simulationViewSchema } from '@simulador/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CreateSimulation } from '../../application/create-simulation';
 import { GetSimulation } from '../../application/get-simulation';
@@ -79,6 +79,17 @@ describe('POST /simulations', () => {
         installments: ['Máximo de 96 parcelas'],
         consent: ['É necessário autorizar a consulta aos bancos'],
       },
+    });
+  });
+
+  it('answers 400 asking to reload when the form showed an older consent text', async () => {
+    const { post } = await setup();
+    const response = await post({ ...BODY, consentVersion: '2026-09-v1' });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      message: 'Dados inválidos.',
+      errors: { consentVersion: [STALE_CONSENT_MESSAGE] },
     });
   });
 
