@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { simulationInputSchema } from './simulation';
+import { MAX_AMOUNT_CENTS, simulationInputSchema, simulationViewSchema } from './simulation';
 
 const validInput = {
   name: 'Maria Silva',
@@ -72,5 +72,74 @@ describe('simulationInputSchema', () => {
     const { consent: _omitted, ...input } = validInput;
 
     expect(issuesFor(input)).toEqual(['consent']);
+  });
+
+  it.each(['netSalaryCents', 'requestedAmountCents'])(
+    'caps %s at R$ 1.000.000,00 with a Portuguese message',
+    (field) => {
+      expect(issuesFor({ ...validInput, [field]: MAX_AMOUNT_CENTS })).toEqual([]);
+      const result = simulationInputSchema.safeParse({
+        ...validInput,
+        [field]: MAX_AMOUNT_CENTS + 1,
+      });
+      expect(result.error?.issues[0]).toMatchObject({
+        path: [field],
+        message: 'Valor máximo: R$ 1.000.000,00',
+      });
+    },
+  );
+});
+
+describe('simulationViewSchema', () => {
+  const view = {
+    id: '2f1c6b8e-4f5a-4b7e-9c3d-1a2b3c4d5e6f',
+    createdAt: '2026-10-22T12:00:00.000Z',
+    status: 'COMPLETED_WITH_OFFERS',
+    retryable: false,
+    request: { requestedAmountCents: 1_000_000, installments: 48, cpfMasked: '***.982.247-**' },
+    margin: { fitsMargin: true },
+    bestOffer: { bankId: 'beta' },
+    results: [
+      {
+        bankId: 'beta',
+        status: 'APPROVED',
+        offer: {
+          amountCents: 818_255,
+          installments: 48,
+          monthlyRate: 0.0159,
+          installmentCents: 24_500,
+        },
+        isCounterOffer: true,
+        totalPayableCents: 1_176_000,
+        latencyMs: 820,
+        attempts: 1,
+      },
+      { bankId: 'gama', status: 'UNAVAILABLE', reason: 'O banco não respondeu a tempo.' },
+    ],
+  };
+
+  it('accepts a complete view', () => {
+    expect(simulationViewSchema.safeParse(view).success).toBe(true);
+  });
+
+  it.each([
+    ['marginCents', { ...view, margin: { ...view.margin, marginCents: 175_000 } }],
+    ['commitmentBps', { ...view, margin: { ...view.margin, commitmentBps: 1_788 } }],
+    ['a full CPF', { ...view, request: { ...view.request, cpf: '52998224725' } }],
+  ])('rejects extra data such as %s', (_, candidate) => {
+    expect(simulationViewSchema.safeParse(candidate).success).toBe(false);
+  });
+
+  it('requires the counter-offer flag and total on approved results only', () => {
+    const [approved, unavailable] = view.results;
+    const { isCounterOffer: _flag, ...withoutFlag } = approved ?? {};
+
+    expect(simulationViewSchema.safeParse({ ...view, results: [withoutFlag] }).success).toBe(false);
+    expect(
+      simulationViewSchema.safeParse({
+        ...view,
+        results: [{ ...unavailable, isCounterOffer: false }],
+      }).success,
+    ).toBe(false);
   });
 });

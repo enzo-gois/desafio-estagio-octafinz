@@ -19,7 +19,7 @@ export const offerSchema = z.object({
   installmentCents: centsSchema,
 });
 
-const bankResultBase = {
+export const bankResultBaseShape = {
   bankId: z.string().min(1),
   reason: z.string().optional(),
   latencyMs: z.number().int().nonnegative().optional(),
@@ -30,9 +30,9 @@ const bankResultBase = {
 // Discriminated by status: APPROVED always carries an offer and no other status can.
 // strictObject rejects an unexpected `offer` instead of silently stripping it.
 export const bankResultSchema = z.discriminatedUnion('status', [
-  z.strictObject({ ...bankResultBase, status: z.literal('APPROVED'), offer: offerSchema }),
+  z.strictObject({ ...bankResultBaseShape, status: z.literal('APPROVED'), offer: offerSchema }),
   z.strictObject({
-    ...bankResultBase,
+    ...bankResultBaseShape,
     status: bankResultStatusSchema.exclude(['APPROVED']),
   }),
 ]);
