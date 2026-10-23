@@ -5,6 +5,17 @@ export interface BankCallContext {
   simulationId: string;
 }
 
+/**
+ * Abort reason that tells the adapter which message to record for the customer. Whoever aborts
+ * knows why (e.g. the API is shutting down); the adapter only knows that it was aborted.
+ */
+export class BankCallAbort extends Error {
+  constructor(readonly customerMessage: string) {
+    super(customerMessage);
+    this.name = 'BankCallAbort';
+  }
+}
+
 /** Port implemented by one adapter per bank (infra/banks). */
 export interface BankProvider {
   readonly id: string;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BankCallAbort } from '../../../application/ports/bank-provider';
 import {
   CONTEXT,
   CUSTOMER,
@@ -184,6 +185,46 @@ describe('bank adapter (common behavior)', () => {
       await expect(
         adapter.simulate(CUSTOMER, new AbortController().signal, CONTEXT),
       ).resolves.toMatchObject({ status: 'ERROR' });
+    });
+  });
+
+  describe('abort reason and correlation', () => {
+    function abortedCall(reason?: unknown) {
+      const capture = createCaptureLogger();
+      const { sender } = fixedSender(failure('ABORTED'));
+      const adapter = createAlfaAdapter({
+        endpoint: endpointFor('alfa'),
+        client: sender,
+        logger: capture.logger,
+      });
+      const controller = new AbortController();
+      controller.abort(reason);
+      return { result: adapter.simulate(CUSTOMER, controller.signal, CONTEXT), capture };
+    }
+
+    it('records the message chosen by whoever aborted (e.g. the shutdown)', async () => {
+      const { result } = abortedCall(
+        new BankCallAbort('O banco não respondeu a tempo. Tente novamente.'),
+      );
+
+      expect(await result).toMatchObject({
+        status: 'UNAVAILABLE',
+        reason: 'O banco não respondeu a tempo. Tente novamente.',
+      });
+    });
+
+    it('falls back to the generic cancel message for any other abort', async () => {
+      expect(await abortedCall().result).toMatchObject({ reason: 'A consulta foi cancelada.' });
+    });
+
+    it('logs every line with the simulationId (correlation id)', async () => {
+      const { result, capture } = abortedCall();
+      await result;
+
+      expect(capture.entries().length).toBeGreaterThan(0);
+      for (const entry of capture.entries()) {
+        expect(entry).toMatchObject({ bankId: 'alfa', simulationId: CONTEXT.simulationId });
+      }
     });
   });
 });

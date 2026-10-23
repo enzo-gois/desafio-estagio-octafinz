@@ -5,7 +5,7 @@ import {
   type SimulationInput,
 } from '@simulador/shared';
 import type { z } from 'zod';
-import type { BankProvider } from '../../../application/ports/bank-provider';
+import { BankCallAbort, type BankProvider } from '../../../application/ports/bank-provider';
 import type { Logger } from '../../../application/ports/logger';
 import type { HttpOutcome, HttpRequest, HttpSender } from '../../http/resilient-http-client';
 import { RETRYABLE_STATUSES } from '../../http/retry-policy';
@@ -58,9 +58,17 @@ function translateReasons(
   return [...translated].join(' ');
 }
 
+// Whoever aborted may have said what the customer should read (e.g. the shutdown message).
+function abortedMessage(signal: AbortSignal): string {
+  return signal.reason instanceof BankCallAbort
+    ? signal.reason.customerMessage
+    : UNAVAILABLE_MESSAGES.ABORTED;
+}
+
 function toBankResult<T>(
   spec: BankAdapterSpec<T>,
   outcome: HttpOutcome,
+  signal: AbortSignal,
   logger: Logger,
 ): BankResult {
   // Only these metadata are ever logged: never request or response bodies, which carry (or
@@ -83,7 +91,9 @@ function toBankResult<T>(
   if (outcome.kind === 'failure') {
     const log = outcome.reason === 'ABORTED' ? logger.info : logger.warn;
     log.call(logger, { ...meta, failure: outcome.reason }, 'bank did not answer');
-    return unavailable(UNAVAILABLE_MESSAGES[outcome.reason]);
+    return unavailable(
+      outcome.reason === 'ABORTED' ? abortedMessage(signal) : UNAVAILABLE_MESSAGES[outcome.reason],
+    );
   }
 
   const { status } = outcome;
@@ -160,12 +170,14 @@ export function createBankAdapter<T>(
   spec: BankAdapterSpec<T>,
   deps: BankAdapterDeps,
 ): BankProvider {
-  const logger = deps.logger.child({ bankId: spec.id });
+  const bankLogger = deps.logger.child({ bankId: spec.id });
   const url = new URL(spec.path, deps.endpoint.baseUrl).toString();
 
   return {
     id: spec.id,
     async simulate(input, signal, context) {
+      // simulationId is the correlation id: it links these lines to the API request logs.
+      const logger = bankLogger.child({ simulationId: context.simulationId });
       const request: HttpRequest = {
         url,
         headers: {
@@ -180,7 +192,7 @@ export function createBankAdapter<T>(
       };
 
       try {
-        return toBankResult(spec, await deps.client.send(request, signal), logger);
+        return toBankResult(spec, await deps.client.send(request, signal), signal, logger);
       } catch (cause) {
         // The client never throws by contract; if it does, it is a bug, not a bank answer.
         logger.error(
