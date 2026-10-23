@@ -2,10 +2,17 @@ import { randomUUID } from 'node:crypto';
 import type { ApprovedBankResult, SimulationInput } from '@simulador/shared';
 import { vi } from 'vitest';
 import type { SimulationStarter } from '../application/create-simulation';
+import type { BankDescriptor } from '../application/ports/bank-catalog';
 import type { NewSimulation } from '../application/ports/simulation-repository';
 
 export const BANK_IDS = ['alfa', 'beta', 'gama'] as const;
 export const T0 = new Date('2026-10-22T12:00:00.000Z');
+
+export const BANKS: readonly BankDescriptor[] = [
+  { id: 'alfa', displayName: 'Banco Alfa', sharedFields: ['cpf', 'birthDate'] },
+  { id: 'beta', displayName: 'Banco Beta', sharedFields: ['cpf', 'netSalaryCents'] },
+  { id: 'gama', displayName: 'Banco Gama', sharedFields: ['cpf', 'employerCnpj'] },
+];
 
 export function newSimulation(overrides: Partial<NewSimulation> = {}): NewSimulation {
   return {

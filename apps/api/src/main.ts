@@ -4,7 +4,7 @@ import { GetSimulation, PENDING_EXPIRED_MESSAGE } from './application/get-simula
 import { SimulationOrchestrator } from './application/simulation-orchestrator';
 import { buildApp } from './http/app';
 import { createLogger } from './http/logger-options';
-import { createBankProviders } from './infra/banks/registry';
+import { BANK_CATALOG, createBankProviders } from './infra/banks/registry';
 import { type AppConfig, loadAppConfig } from './infra/config/env';
 import { systemClock } from './infra/http/clock';
 import { createPrismaClient } from './infra/persistence/prisma-client';
@@ -51,6 +51,7 @@ try {
     corsOrigins: config.http.corsOrigins,
     trustProxy: config.http.trustProxy,
     rateLimit: config.http.rateLimit,
+    banks: BANK_CATALOG,
     createSimulation: new CreateSimulation({
       repository,
       starter: orchestrator,

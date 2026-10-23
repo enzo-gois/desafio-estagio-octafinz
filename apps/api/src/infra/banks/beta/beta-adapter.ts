@@ -1,10 +1,21 @@
-import type { EmploymentType } from '@simulador/shared';
+import type { EmploymentType, SimulationDataField } from '@simulador/shared';
 import type { BankProvider } from '../../../application/ports/bank-provider';
 import { type BankAdapterDeps, createBankAdapter } from '../common/bank-adapter';
 import { centsToDecimalString } from '../common/money';
 import { type BetaResponse, betaResponseSchema } from './beta-contract';
 
 export const BETA_ID = 'beta';
+
+// Exactly the input fields toRequestBody sends (see ALFA_SHARED_FIELDS).
+export const BETA_SHARED_FIELDS = [
+  'cpf',
+  'birthDate',
+  'employmentType',
+  'employerCnpj',
+  'netSalaryCents',
+  'requestedAmountCents',
+  'installments',
+] as const satisfies readonly SimulationDataField[];
 
 // A Record (not a switch): adding an employment type breaks the build until Beta maps it.
 const BETA_EMPLOYMENT_TYPES: Record<EmploymentType, string> = {

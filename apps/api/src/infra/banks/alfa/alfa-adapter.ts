@@ -1,8 +1,21 @@
+import type { SimulationDataField } from '@simulador/shared';
 import type { BankProvider } from '../../../application/ports/bank-provider';
 import { type BankAdapterDeps, createBankAdapter } from '../common/bank-adapter';
 import { type AlfaResponse, alfaResponseSchema } from './alfa-contract';
 
 export const ALFA_ID = 'alfa';
+
+// Exactly the input fields toRequestBody sends. The consent text (GET /banks) is built from
+// this list, and shared-fields.test.ts fails if the two diverge.
+export const ALFA_SHARED_FIELDS = [
+  'cpf',
+  'birthDate',
+  'netSalaryCents',
+  'employmentType',
+  'employerCnpj',
+  'requestedAmountCents',
+  'installments',
+] as const satisfies readonly SimulationDataField[];
 
 const REASON_MESSAGES = new Map([
   ['AGE_OUT_OF_RANGE', 'Idade fora da faixa aceita pelo banco.'],

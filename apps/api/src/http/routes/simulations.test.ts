@@ -1,10 +1,15 @@
-import { STALE_CONSENT_MESSAGE, simulationViewSchema } from '@simulador/shared';
+import {
+  bankCatalogViewSchema,
+  CONSENT_VERSION,
+  STALE_CONSENT_MESSAGE,
+  simulationViewSchema,
+} from '@simulador/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CreateSimulation } from '../../application/create-simulation';
 import { GetSimulation } from '../../application/get-simulation';
 import { InMemorySimulationRepository } from '../../infra/persistence/in-memory-simulation-repository';
 import { CUSTOMER } from '../../testing/bank-fixtures';
-import { fakeStarter, T0 } from '../../testing/simulation-fixtures';
+import { BANKS, fakeStarter, T0 } from '../../testing/simulation-fixtures';
 import { buildApp } from '../app';
 import { HTTP_MESSAGES } from '../errors';
 import { createLogger } from '../logger-options';
@@ -31,6 +36,7 @@ async function setup(
     logger,
     corsOrigins: [FRONT],
     trustProxy: false,
+    banks: BANKS,
     rateLimit: { postMax: options.postMax ?? 100, getMax: 1_000, windowMs: 60_000 },
     createSimulation: new CreateSimulation({
       repository,
@@ -194,6 +200,24 @@ describe('GET /simulations/:id', () => {
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({ message: HTTP_MESSAGES.INTERNAL });
     expect(response.body).not.toContain('secret');
+  });
+});
+
+describe('GET /banks', () => {
+  it('returns the consent version and, per bank, its name and the fields it receives', async () => {
+    const { app } = await setup();
+    const response = await app.inject({ method: 'GET', url: '/banks' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(bankCatalogViewSchema.parse(response.json())).toEqual({
+      consentVersion: CONSENT_VERSION,
+      banks: [
+        { id: 'alfa', name: 'Banco Alfa', sharedFields: ['cpf', 'birthDate'] },
+        { id: 'beta', name: 'Banco Beta', sharedFields: ['cpf', 'netSalaryCents'] },
+        { id: 'gama', name: 'Banco Gama', sharedFields: ['cpf', 'employerCnpj'] },
+      ],
+    });
   });
 });
 

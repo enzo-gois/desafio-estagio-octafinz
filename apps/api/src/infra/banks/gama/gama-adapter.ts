@@ -1,9 +1,21 @@
+import type { SimulationDataField } from '@simulador/shared';
 import type { BankProvider } from '../../../application/ports/bank-provider';
 import { type BankAdapterDeps, createBankAdapter } from '../common/bank-adapter';
 import { centsToReais } from '../common/money';
 import { type GamaResponse, gamaResponseSchema } from './gama-contract';
 
 export const GAMA_ID = 'gama';
+
+// Exactly the input fields toRequestBody sends (see ALFA_SHARED_FIELDS). No employment type:
+// Gama's contract has none.
+export const GAMA_SHARED_FIELDS = [
+  'cpf',
+  'birthDate',
+  'employerCnpj',
+  'netSalaryCents',
+  'requestedAmountCents',
+  'installments',
+] as const satisfies readonly SimulationDataField[];
 
 const REASON_MESSAGES = new Map([
   ['EMPLOYER_RESTRICTED', 'Empresa empregadora não atendida pelo banco.'],
