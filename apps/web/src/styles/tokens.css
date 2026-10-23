@@ -1,0 +1,40 @@
+/* Design tokens. Text colors keep at least 4.5:1 contrast on their background (WCAG AA). */
+:root {
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-small: 0.875rem;
+  --font-size-body: 1rem;
+  --font-size-title: clamp(1.5rem, 1.2rem + 1.5vw, 2rem);
+  --line-height: 1.5;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  --radius: 0.5rem;
+  --control-height: 2.75rem; /* 44 px: comfortable touch target */
+
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-text: #1b1f24;
+  --color-muted: #545d68;
+  --color-border: #c9d1d9;
+  --color-border-strong: #8c959f;
+
+  --color-primary: #0b5cad;
+  --color-primary-hover: #094c8f;
+  --color-on-primary: #ffffff;
+
+  --color-danger: #b42318;
+  --color-danger-bg: #fef3f2;
+  --color-success: #067647;
+  --color-success-bg: #ecfdf3;
+  --color-warning: #93370d;
+  --color-warning-bg: #fffaeb;
+  --color-info: #0b5cad;
+  --color-info-bg: #eff6ff;
+
+  --focus-ring: 0 0 0 3px #2f81f7;
+}

@@ -1,14 +1,19 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { App } from './App';
+import { renderApp } from './testing/render';
 
-describe('App', () => {
-  it('renders with the limits from @simulador/shared', () => {
-    render(<App />);
+describe('App routes', () => {
+  it('opens the simulation form at /', async () => {
+    renderApp();
 
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Simulador de empréstimo consignado' }),
+      await screen.findByRole('heading', { level: 1, name: 'Simule seu empréstimo consignado' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Prazos de 6 a 96 parcelas.')).toBeInTheDocument();
+  });
+
+  it('answers an unknown path with a not-found page', () => {
+    renderApp({ route: '/admin' });
+
+    expect(screen.getByRole('heading', { name: 'Página não encontrada' })).toBeInTheDocument();
   });
 });
