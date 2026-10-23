@@ -27,25 +27,40 @@ serviços de terceiros (bancos) que não controlamos**, com resiliência a falha
 Dependências apontam para dentro: `http` e `infra` dependem de `application`/`domain`, nunca o contrário.
 
 ## Contratos centrais
+Fonte da verdade: schemas Zod em `packages/shared` e portas em `apps/api/src/application/ports`.
 ```ts
 type BankResultStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'UNAVAILABLE' | 'ERROR';
+type Offer = { amountCents: number; installments: number; monthlyRate: number; installmentCents: number };
 
-interface BankResult {
+// União discriminada por status (strictObject): só APPROVED tem offer, e nela é obrigatória.
+type BankResult = {
   bankId: string;
-  status: BankResultStatus;
-  offer?: { amountCents: number; installments: number; monthlyRate: number; installmentCents: number };
   reason?: string;     // motivo legível ao cliente
   latencyMs?: number;
-}
+  attempts?: number;   // tentativas HTTP; 0 = circuito aberto, nenhuma chamada feita
+} & ({ status: 'APPROVED'; offer: Offer } | { status: Exclude<BankResultStatus, 'APPROVED'> });
 
 interface BankProvider {
   readonly id: string;
-  // context.simulationId compõe o Idempotency-Key (simulationId:bankId), igual em todas as tentativas.
+  // Nunca rejeita: falha vira UNAVAILABLE (não respondeu) ou ERROR (respondeu errado).
+  // context.simulationId compõe o Idempotency-Key (simulationId:bankId) e o correlation id dos logs.
   simulate(
     input: SimulationInput,
     signal: AbortSignal,
     context: { simulationId: string },
   ): Promise<BankResult>;
+}
+
+// GET /simulations/:id. Sem autenticação (o UUID é a chave): nada pessoal além do CPF mascarado.
+interface SimulationView {
+  id: string;
+  createdAt: string;
+  status: 'PROCESSING' | 'COMPLETED_WITH_OFFERS' | 'COMPLETED_WITHOUT_OFFERS';
+  retryable: boolean;                    // concluída com algum banco UNAVAILABLE/ERROR
+  request: { requestedAmountCents: number; installments: number; cpfMasked: string };
+  margin: { fitsMargin: boolean };       // só isso: o resto permitiria recalcular o salário
+  bestOffer: { bankId: string } | null;  // menor taxa mensal (contrapropostas incluídas)
+  results: BankResultView[];             // BankResult; se APPROVED, + isCounterOffer e totalPayableCents
 }
 ```
 
