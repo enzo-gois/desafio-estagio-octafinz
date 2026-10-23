@@ -112,6 +112,7 @@ describe('simulationViewSchema', () => {
   const view = {
     id: '2f1c6b8e-4f5a-4b7e-9c3d-1a2b3c4d5e6f',
     createdAt: '2026-10-22T12:00:00.000Z',
+    serverTime: '2026-10-22T12:00:07.000Z',
     status: 'COMPLETED_WITH_OFFERS',
     retryable: false,
     request: { requestedAmountCents: 1_000_000, installments: 48, cpfMasked: '***.982.247-**' },
@@ -120,6 +121,7 @@ describe('simulationViewSchema', () => {
     results: [
       {
         bankId: 'beta',
+        bankName: 'Banco Beta',
         status: 'APPROVED',
         offer: {
           amountCents: 818_255,
@@ -132,7 +134,12 @@ describe('simulationViewSchema', () => {
         latencyMs: 820,
         attempts: 1,
       },
-      { bankId: 'gama', status: 'UNAVAILABLE', reason: 'O banco não respondeu a tempo.' },
+      {
+        bankId: 'gama',
+        bankName: 'Banco Gama',
+        status: 'UNAVAILABLE',
+        reason: 'O banco não respondeu a tempo.',
+      },
     ],
   };
 
@@ -146,6 +153,15 @@ describe('simulationViewSchema', () => {
     ['a full CPF', { ...view, request: { ...view.request, cpf: '52998224725' } }],
   ])('rejects extra data such as %s', (_, candidate) => {
     expect(simulationViewSchema.safeParse(candidate).success).toBe(false);
+  });
+
+  it('requires the server time and a bank name on every result', () => {
+    const { serverTime: _omitted, ...withoutServerTime } = view;
+    const [, unavailable] = view.results;
+    const { bankName: _name, ...withoutName } = unavailable ?? {};
+
+    expect(simulationViewSchema.safeParse(withoutServerTime).success).toBe(false);
+    expect(simulationViewSchema.safeParse({ ...view, results: [withoutName] }).success).toBe(false);
   });
 
   it('requires the counter-offer flag and total on approved results only', () => {

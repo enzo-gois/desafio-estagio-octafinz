@@ -2,7 +2,7 @@ import { simulationViewSchema } from '@simulador/shared';
 import { describe, expect, it } from 'vitest';
 import { InMemorySimulationRepository } from '../infra/persistence/in-memory-simulation-repository';
 import { CUSTOMER } from '../testing/bank-fixtures';
-import { approved, fakeStarter, newSimulation, T0 } from '../testing/simulation-fixtures';
+import { approved, BANKS, fakeStarter, newSimulation, T0 } from '../testing/simulation-fixtures';
 import { CreateSimulation } from './create-simulation';
 import { GetSimulation, PENDING_EXPIRED_MESSAGE } from './get-simulation';
 
@@ -12,7 +12,12 @@ function setup() {
   const repository = new InMemorySimulationRepository();
   let now = T0.getTime();
   const clock = { now: () => now };
-  const getSimulation = new GetSimulation({ repository, clock, pendingTtlMs: TTL_MS });
+  const getSimulation = new GetSimulation({
+    repository,
+    clock,
+    pendingTtlMs: TTL_MS,
+    banks: BANKS,
+  });
   return {
     repository,
     getSimulation,
@@ -66,15 +71,22 @@ describe('GetSimulation', () => {
     expect(simulationViewSchema.parse(view)).toEqual({
       id: simulation.id,
       createdAt: '2026-10-22T12:00:00.000Z',
+      serverTime: '2026-10-22T12:00:00.000Z',
       status: 'COMPLETED_WITH_OFFERS',
       retryable: true,
       request: { requestedAmountCents: 1_000_000, installments: 48, cpfMasked: '***.982.247-**' },
       margin: { fitsMargin: true },
       bestOffer: { bankId: 'beta' }, // lowest rate, even though it is a counter-offer (B1)
       results: [
-        { ...approved('alfa'), isCounterOffer: false, totalPayableCents: 1_498_752 },
+        {
+          ...approved('alfa'),
+          bankName: 'Banco Alfa',
+          isCounterOffer: false,
+          totalPayableCents: 1_498_752,
+        },
         {
           bankId: 'beta',
+          bankName: 'Banco Beta',
           status: 'APPROVED',
           offer: {
             amountCents: 818_255,
@@ -85,9 +97,31 @@ describe('GetSimulation', () => {
           isCounterOffer: true,
           totalPayableCents: 1_176_000,
         },
-        { bankId: 'gama', status: 'UNAVAILABLE' },
+        { bankId: 'gama', bankName: 'Banco Gama', status: 'UNAVAILABLE' },
       ],
     });
+  });
+
+  it("reports the server's time at read, not the creation time", async () => {
+    const { repository, getSimulation, advance } = setup();
+    const simulation = newSimulation();
+    await repository.create(simulation);
+    advance(7_250);
+
+    expect(await getSimulation.execute(simulation.id)).toMatchObject({
+      createdAt: '2026-10-22T12:00:00.000Z',
+      serverTime: '2026-10-22T12:00:07.250Z',
+    });
+  });
+
+  it('names a bank no longer in the registry after its id', async () => {
+    const { repository, getSimulation } = setup();
+    const simulation = newSimulation({ bankIds: ['alfa', 'delta'] });
+    await repository.create(simulation);
+
+    const view = await getSimulation.execute(simulation.id);
+
+    expect(view?.results.map((result) => result.bankName)).toEqual(['Banco Alfa', 'delta']);
   });
 
   describe('PENDING expiry (E3, on read)', () => {
@@ -112,8 +146,8 @@ describe('GetSimulation', () => {
       expect(view).toMatchObject({ status: 'COMPLETED_WITH_OFFERS', retryable: true });
       const expired = { status: 'UNAVAILABLE', reason: PENDING_EXPIRED_MESSAGE };
       expect(view?.results.slice(1)).toEqual([
-        { bankId: 'beta', ...expired },
-        { bankId: 'gama', ...expired },
+        { bankId: 'beta', bankName: 'Banco Beta', ...expired },
+        { bankId: 'gama', bankName: 'Banco Gama', ...expired },
       ]);
       expect((await repository.findById(simulation.id))?.results[1]).toMatchObject(expired);
     });
@@ -135,6 +169,7 @@ describe('GetSimulation', () => {
         repository,
         clock: { now: () => T0.getTime() },
         pendingTtlMs: TTL_MS,
+        banks: BANKS,
       });
       const { id } = await create.execute({ ...CUSTOMER, netSalaryCents });
       const { id: _id, ...view } = (await get.execute(id)) ?? {};

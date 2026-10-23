@@ -63,6 +63,7 @@ try {
       repository,
       clock: systemClock,
       pendingTtlMs: config.pendingTtlMs,
+      banks: BANK_CATALOG,
     }),
   });
 

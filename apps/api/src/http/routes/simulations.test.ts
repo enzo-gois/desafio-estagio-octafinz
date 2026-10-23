@@ -31,7 +31,12 @@ async function setup(
   const logger = createLogger('info', { write: (line: string) => lines.push(line) });
   const repository = new InMemorySimulationRepository();
   const clock = { now: () => T0.getTime() };
-  const getSimulation = new GetSimulation({ repository, clock, pendingTtlMs: 22_000 });
+  const getSimulation = new GetSimulation({
+    repository,
+    clock,
+    pendingTtlMs: 22_000,
+    banks: BANKS,
+  });
   const app = await buildApp({
     logger,
     corsOrigins: [FRONT],

@@ -62,18 +62,22 @@ export const SIMULATION_STATUSES = [
   'COMPLETED_WITHOUT_OFFERS',
 ] as const;
 
+// The bank's display name comes from the API's bank registry, so the front needs no list of
+// banks: adding one stays adapter + registry.
+const bankResultViewBaseShape = { ...bankResultBaseShape, bankName: z.string().min(1) };
+
 // A bank result as the GET returns it: approved offers carry what the front needs to show
 // them (counter-offer flag, total to pay); every other status is the plain BankResult.
 export const bankResultViewSchema = z.discriminatedUnion('status', [
   z.strictObject({
-    ...bankResultBaseShape,
+    ...bankResultViewBaseShape,
     status: z.literal('APPROVED'),
     offer: offerSchema,
     isCounterOffer: z.boolean(),
     totalPayableCents: centsSchema,
   }),
   z.strictObject({
-    ...bankResultBaseShape,
+    ...bankResultViewBaseShape,
     status: bankResultStatusSchema.exclude(['APPROVED']),
   }),
 ]);
@@ -87,6 +91,9 @@ export const bankResultViewSchema = z.discriminatedUnion('status', [
 export const simulationViewSchema = z.strictObject({
   id: z.uuid(),
   createdAt: z.iso.datetime(),
+  // When the response was built. The front measures elapsed time against this, not against its
+  // own clock, which may be minutes off.
+  serverTime: z.iso.datetime(),
   status: z.enum(SIMULATION_STATUSES),
   retryable: z.boolean(),
   request: z.strictObject({
