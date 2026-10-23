@@ -23,6 +23,10 @@ export function createBaseServer(bankId: string, logLevel?: string): BaseServer 
       // would reject "1000" for an integer or an extra field, so the mock does too.
       customOptions: { coerceTypes: false, removeAdditional: false },
     },
+    // close() destroys every connection, not only the ones idle at that instant. A response
+    // finishing during close (e.g. a "timeout" scenario cut short by preClose) would otherwise
+    // leave a keep-alive connection open for Fastify's 72 s keep-alive timeout.
+    forceCloseConnections: true,
   });
 
   const shutdown = new AbortController();
