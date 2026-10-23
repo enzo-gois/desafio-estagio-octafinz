@@ -51,20 +51,35 @@ interface BankProvider {
   ): Promise<BankResult>;
 }
 
+// Registro de bancos (infra/banks/registry.ts): displayName + <BANCO>_SHARED_FIELDS do adapter.
+interface BankDescriptor {
+  id: string;
+  displayName: string;
+  sharedFields: SimulationDataField[];   // exatamente os campos do SimulationInput que o adapter envia
+}
+
+// GET /banks: o que o formulário mostra no consentimento, antes de existir simulação.
+interface BankCatalogView {
+  consentVersion: string;                // o POST devolve em consentVersion; só a vigente é aceita
+  banks: { id: string; name: string; sharedFields: SimulationDataField[] }[];
+}
+
 // GET /simulations/:id. Sem autenticação (o UUID é a chave): nada pessoal além do CPF mascarado.
 interface SimulationView {
   id: string;
   createdAt: string;
+  serverTime: string;                    // hora da resposta: o front mede tempo decorrido por ela
   status: 'PROCESSING' | 'COMPLETED_WITH_OFFERS' | 'COMPLETED_WITHOUT_OFFERS';
   retryable: boolean;                    // concluída com algum banco UNAVAILABLE/ERROR
   request: { requestedAmountCents: number; installments: number; cpfMasked: string };
   margin: { fitsMargin: boolean };       // só isso: o resto permitiria recalcular o salário
   bestOffer: { bankId: string } | null;  // menor taxa mensal (contrapropostas incluídas)
-  results: BankResultView[];             // BankResult; se APPROVED, + isCounterOffer e totalPayableCents
+  results: BankResultView[];             // BankResult + bankName; se APPROVED, + isCounterOffer e totalPayableCents
 }
 ```
 
 ## Fluxo
+0. O formulário carrega `GET /banks` para montar o texto do consentimento.
 1. `POST /simulations` valida com Zod, salva com todos os bancos `PENDING`, responde `202 { id }`.
 2. Em background, o orquestrador chama todos os bancos em paralelo (`Promise.allSettled`),
    gravando cada resultado assim que chega.
@@ -88,3 +103,8 @@ interface SimulationView {
 - Margem consignável e taxas são **fictícias e configuráveis** (documentadas no README).
 - Mensagens ao usuário em português; código e nomes em inglês.
 - Todo adapter novo precisa de testes para: resposta de aprovação, de reprovação e malformada.
+- Adicionar um banco = adapter + entrada no registro (+ endpoint em `bank-config`). O front não
+  conhece bancos: nome e campos vêm da API.
+- Todo adapter declara `<BANCO>_SHARED_FIELDS`, exatamente os campos que envia (conferido por
+  `shared-fields.test.ts`). Mudar nome ou campos de um banco exige nova `CONSENT_VERSION`
+  (`consent-version.test.ts`).
