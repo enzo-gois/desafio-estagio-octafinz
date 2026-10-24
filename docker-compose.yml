@@ -17,6 +17,9 @@ services:
       BANK_ALFA_EXTRA_HEADERS: ${BANK_ALFA_EXTRA_HEADERS:-}
       BANK_BETA_EXTRA_HEADERS: ${BANK_BETA_EXTRA_HEADERS:-}
       BANK_GAMA_EXTRA_HEADERS: ${BANK_GAMA_EXTRA_HEADERS:-}
+      # The client's IP comes from X-Forwarded-For, which nginx overwrites with the address it
+      # saw. Safe only because nginx is the only way in: the API publishes no port.
+      TRUST_PROXY: 'true'
     volumes:
       - api-data:/data
     # No depends_on on mock-banks: the API starts without the banks, and their cards show
@@ -35,6 +38,24 @@ services:
       timeout: 3s
       retries: 3
       start_period: 30s
+      start_interval: 1s
+
+  web:
+    build:
+      context: .
+      target: web
+    # The only port published on the host.
+    ports:
+      - '8080:8080'
+    # No depends_on on the API: nginx resolves it per request, so the front loads without it
+    # and /api/ answers 502 until the API is up.
+    healthcheck:
+      # nginx is up and the build is in place (index.html). Never the API.
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/healthz]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
       start_interval: 1s
 
 volumes:

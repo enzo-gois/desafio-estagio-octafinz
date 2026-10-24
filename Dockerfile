@@ -1,9 +1,11 @@
-# One Dockerfile for the monorepo, one target per service (api, mock-banks). The build context
-# is the repository root anyway: one lockfile, and @simulador/shared is TypeScript source.
+# One Dockerfile for the monorepo, one target per service (api, mock-banks, web). The build
+# context is the repository root anyway: one lockfile, and @simulador/shared is TypeScript source.
 
 # Same Node as local development. Debian slim (glibc), not Alpine (musl): better-sqlite3 and
 # Prisma's schema engine are native binaries, prebuilt for glibc.
 ARG NODE_VERSION=24.14.1
+# nginx stable branch. Alpine is fine here: nginx loads no Node native addon.
+ARG NGINX_VERSION=1.30.6
 
 FROM node:${NODE_VERSION}-trixie-slim AS base
 # Prisma's schema engine (migrate deploy) needs libssl, which slim images do not ship.
@@ -39,6 +41,11 @@ COPY . .
 RUN npm run build -w @simulador/api -w @simulador/mock-banks \
   && npm prune --omit=dev
 
+# The front's static build. VITE_API_URL keeps its default (/api): nginx proxies it.
+FROM deps AS web-build
+COPY . .
+RUN npm run build -w @simulador/web
+
 # --- API: migrations at boot, then the server -------------------------------------------------
 FROM base AS api
 ENV NODE_ENV=production
@@ -73,3 +80,11 @@ WORKDIR /app/apps/mock-banks
 ENV MOCK_BANKS_HOST=0.0.0.0
 EXPOSE 4001 4002 4003
 CMD ["node", "dist/main.js"]
+
+# --- Web: the front's build behind nginx, which also proxies /api/ to the API ---------------
+# The unprivileged image runs nginx as uid 101 and listens on 8080 (no root, no port below 1024).
+FROM nginxinc/nginx-unprivileged:${NGINX_VERSION}-alpine AS web
+COPY apps/web/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY apps/web/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY --from=web-build /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 8080
