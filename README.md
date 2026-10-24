@@ -12,10 +12,16 @@ em cerca de 1 s, o Beta em 3 s e o Gama, forçado a falhar (`x-mock-scenario: er
 foi elevada (`BETA_LATENCY_MIN_MS=2000`, `BETA_LATENCY_MAX_MS=2500`), para que os cards cheguem
 um de cada vez.
 
+## Pré-requisitos
+
+- **Para rodar com Docker:** Docker Desktop atualizado (no Linux, Docker Engine com o plugin
+  Compose v2). No Windows, o Docker Desktop precisa do **WSL 2**: com uma versão antiga do Docker
+  Desktop ou sem o WSL 2, o motor do Docker não sobe e o `docker compose` não consegue conectar.
+- **Para o modo de desenvolvimento:** Node 24 ou mais recente.
+
 ## Como rodar em desenvolvimento
 
-Requer Node 24 ou mais recente. Cada comando abaixo roda num terminal próprio, na raiz do
-repositório.
+Cada comando abaixo roda num terminal próprio, na raiz do repositório.
 
 ```bash
 npm install                                # também gera o client do Prisma
@@ -201,6 +207,26 @@ as consultas em andamento por até `SHUTDOWN_DRAIN_MS`; o `GET` continua respond
 que restou, gravando "O banco não respondeu a tempo. Tente novamente.", e espera até
 `SHUTDOWN_ABORT_GRACE_MS` por essas gravações. A soma é validada no boot para caber nos 10 s do
 `docker stop`.
+
+### Imagens Docker: o CLI do Prisma vai na imagem da API
+
+Um único `Dockerfile`, na raiz, gera uma imagem por serviço sobre `node:24.14.1-trixie-slim`
+(328 MB). A base é glibc, não Alpine: o better-sqlite3 e o motor de migrações do Prisma são
+binários nativos pré-compilados para glibc.
+
+- **API: 864 MB.** A cada boot, a API roda `prisma migrate deploy` antes de subir o servidor. Por
+  isso o CLI do Prisma está na imagem (`prisma` fica em `dependencies`, não em `devDependencies`),
+  e ele responde por cerca de 150 MB: o pacote `prisma` com as dependências que ficam junto dele
+  (87 MB), o Prisma Studio (43 MB) e o motor de migrações (24 MB). O servidor não usa nenhum deles.
+- **Alternativa: um serviço de migração de execução única.** Um serviço `migrate` no compose,
+  feito a partir da imagem de build, rodaria o `migrate deploy` e terminaria; a API subiria
+  depois dele (`depends_on` com `condition: service_completed_successfully`), numa imagem sem o
+  CLI. O custo é a garantia: com a migração no comando da própria API, qualquer forma de subir a
+  imagem (compose, `docker run`, um orquestrador) migra antes de servir; com o serviço à parte,
+  quem sobe só a API pode apontá-la para um banco sem as migrações.
+- **Bancos simulados: 385 MB.** Eles representam serviços de outra empresa (nem importam o
+  `shared`), então a imagem leva só as dependências de produção deles: um `npm ci --omit=dev`
+  restrito ao workspace, com 51 MB de `node_modules` em vez dos 326 MB do monorepo inteiro.
 
 ### Proposta planejada: tentar de novo só um banco (R3)
 
