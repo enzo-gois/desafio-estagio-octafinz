@@ -1,0 +1,11 @@
+import { defineConfig } from 'tsup';
+
+// Same build as the API: the container runs plain JavaScript, with no TypeScript loader.
+export default defineConfig({
+  entry: ['src/main.ts'],
+  format: ['esm'],
+  platform: 'node',
+  target: 'node24',
+  clean: true,
+  sourcemap: true,
+});
