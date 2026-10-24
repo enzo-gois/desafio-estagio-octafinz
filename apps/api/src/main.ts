@@ -3,7 +3,7 @@ import { CreateSimulation } from './application/create-simulation';
 import { GetSimulation, PENDING_EXPIRED_MESSAGE } from './application/get-simulation';
 import { SimulationOrchestrator } from './application/simulation-orchestrator';
 import { buildApp } from './http/app';
-import { createLogger } from './http/logger-options';
+import { createLogger, flushThenExit } from './http/logger-options';
 import { BANK_CATALOG, createBankProviders } from './infra/banks/registry';
 import { type AppConfig, loadAppConfig } from './infra/config/env';
 import { systemClock } from './infra/http/clock';
@@ -76,7 +76,7 @@ try {
     shuttingDown = true;
     setTimeout(() => {
       logger.error('shutdown did not finish in time; exiting');
-      process.exit(1);
+      flushThenExit(logger, 1);
     }, HARD_STOP_MS).unref();
 
     logger.info({ signal }, 'shutting down');
@@ -85,12 +85,13 @@ try {
     logger.info({ drained, aborted }, 'bank calls finished');
     await app.close();
     await prisma.$disconnect();
-    process.exit(0);
+    logger.info('shutdown complete');
+    flushThenExit(logger, 0);
   };
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => void shutdown(signal));
   }
 } catch (error) {
   logger.error({ err: error }, 'API failed to start');
-  process.exit(1);
+  flushThenExit(logger, 1);
 }

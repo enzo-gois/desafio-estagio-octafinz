@@ -47,3 +47,15 @@ export function loggerOptions(level: string): LoggerOptions {
 export function createLogger(level: string, destination?: DestinationStream): Logger {
   return destination ? pino(loggerOptions(level), destination) : pino(loggerOptions(level));
 }
+
+/**
+ * Exits once the logger has written everything it holds. pino's default stdout destination is
+ * asynchronous, so a line logged right before process.exit may still be in its buffer.
+ */
+export function flushThenExit(
+  logger: Logger,
+  code: number,
+  exit: (code: number) => void = (exitCode) => process.exit(exitCode),
+): void {
+  logger.flush(() => exit(code));
+}
