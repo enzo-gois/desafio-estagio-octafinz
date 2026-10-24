@@ -34,7 +34,11 @@ front passam no healthcheck. Só a porta 8080 fica aberta no host: o nginx serve
 Para parar, `docker compose down`. O banco SQLite fica num volume e sobrevive; `docker compose
 down -v` apaga os dados.
 
-## Smoke test
+## Verificação
+
+Os comandos abaixo são de bash (no Windows, Git Bash ou WSL) e rodam na raiz do repositório.
+
+### Smoke test
 
 Confere o sistema no ar de ponta a ponta: lê o catálogo (`GET /banks`), cria uma simulação com o
 cliente fictício dos testes (nenhum dado pessoal real), acompanha o resultado por até 30 s e valida
@@ -58,6 +62,80 @@ simulados sorteiam falhas. Ele falha quando o sistema falha: resposta fora do sc
 que não termina no prazo, banco ainda pendente no fim, bancos diferentes dos do catálogo ou
 nenhum banco com resposta de fato (aprovação ou reprovação), sinal de que os bancos simulados
 podem nem ter subido.
+
+### Desligamento com uma simulação em andamento
+
+Confere o [desligamento em duas fases](#desligamento-em-duas-fases) no pior caso: o Banco Gama
+forçado a não responder (`timeout`), ainda em andamento durante toda a drenagem.
+
+1. Suba o compose com a Gama em `timeout` (no PowerShell, defina antes
+   `$env:BANK_GAMA_EXTRA_HEADERS='{"x-mock-scenario":"timeout"}'`):
+
+   ```bash
+   BANK_GAMA_EXTRA_HEADERS='{"x-mock-scenario":"timeout"}' docker compose up -d --wait
+   ```
+
+2. Crie uma simulação e pare a API logo em seguida, cronometrando. O `consentVersion` é o que
+   `GET /api/banks` devolve; os dados são os do cliente fictício dos testes.
+
+   ```bash
+   curl -s -X POST http://localhost:8080/api/simulations -H 'content-type: application/json' -d '{"name":"Maria Teresinha Sauro","email":"maria.sauro@example.com","cpf":"52998224725","birthDate":"1985-04-12","employmentType":"PUBLIC_SERVANT","employerCnpj":"12ABC34501DE35","netSalaryCents":734219,"requestedAmountCents":1000000,"installments":48,"consent":true,"consentVersion":"2026-10-v1"}'; time docker compose stop api
+   ```
+
+   A parada precisa vir em até uns 6 s depois do POST. O orçamento da Gama é de 12 s; se sobrar
+   menos que a drenagem (6 s) quando ela começa, a Gama estoura o próprio timeout durante a
+   drenagem e o resultado é o do timeout normal, sem passar pelo cancelamento.
+
+3. Confira o código de saída e o log do desligamento:
+
+   ```bash
+   docker compose ps -a --format '{{.Service}}: {{.State}}, código de saída {{.ExitCode}}' api
+   docker compose logs api --since 2m
+   ```
+
+4. Religue a API e consulte a simulação, com o `id` que o POST devolveu:
+
+   ```bash
+   docker compose start api
+   curl -s http://localhost:8080/api/simulations/<id>
+   docker compose logs api --since 1m
+   ```
+
+5. Volte ao normal (sem a variável, o compose recria a API sem o cenário):
+
+   ```bash
+   docker compose up -d --wait
+   ```
+
+Medido em 24/10/2026, com Docker Desktop 29.9.2 no Windows 11:
+
+| O que conferir              | Esperado                                                    | Medido                                                                                    |
+| --------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Do POST ao `stop`           | logo em seguida                                             | 0,21 s                                                                                    |
+| `docker compose stop api`   | menos de 10 s                                               | 6,94 s                                                                                    |
+| Código de saída da API      | 0 (137 = o Docker precisou matar o processo)                | 0                                                                                         |
+| Simulação depois de religar | Gama UNAVAILABLE com "Tente novamente."; Alfa e Beta finais | Alfa e Beta APPROVED; Gama UNAVAILABLE, "O banco não respondeu a tempo. Tente novamente." |
+| Log do boot seguinte        | nenhuma linha `expired PENDING bank results`                | nenhuma                                                                                   |
+
+O log da API nessa execução, com o tempo contado a partir do SIGTERM:
+
+| Tempo  | Linha do log                                           | O que marca                                                      |
+| ------ | ------------------------------------------------------ | ---------------------------------------------------------------- |
+| 0,00 s | `shutting down` (`signal: SIGTERM`)                    | início da drenagem: POST passa a responder 503, o GET continua   |
+| 0,27 s | `bank answered` (Beta, APPROVED)                       | uma chamada em andamento termina dentro da drenagem              |
+| 6,00 s | `bank did not answer` (Gama, `failure: ABORTED`)       | fim da drenagem (`SHUTDOWN_DRAIN_MS`): a Gama é cancelada        |
+| 6,01 s | `bank calls finished` (`drained: false`, `aborted: 1`) | o resultado cancelado foi gravado                                |
+| 6,02 s | `shutdown complete`                                    | HTTP e banco de dados fechados; é a última linha antes do exit 0 |
+
+A API só sai depois de o logger esvaziar o buffer (`flushThenExit`): o stdout do pino é assíncrono,
+e sem isso o `shutdown complete` poderia se perder no `process.exit`. Os quase 7 s da parada são
+os 6 s de drenagem mais o fechamento e o tempo do próprio Docker.
+
+O código 0 e a frase com "Tente novamente." são o que provam que o desligamento rodou. Se o sinal
+não chegasse ao Node, o Docker o mataria aos 10 s (137) e, no boot seguinte, a
+[expiração de PENDING](#pending-nunca-fica-para-sempre-decisão-e3) tiraria a Gama de PENDING do
+mesmo jeito, mas com outra frase ("O banco não respondeu a tempo.") e uma linha
+`expired PENDING bank results` no log.
 
 ## Como rodar em desenvolvimento
 
