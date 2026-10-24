@@ -1,5 +1,6 @@
 import {
   type BankCatalogView,
+  type BankResultView,
   CONSENT_VERSION,
   type SimulationInput,
   type SimulationView,
@@ -82,6 +83,13 @@ export function completedSimulationView(overrides: Partial<SimulationView> = {})
     ),
     ...overrides,
   });
+}
+
+/** One bank of completedSimulationView(): Alfa approved, Beta a counter-offer, Gama unavailable. */
+export function completedResult(bankId: 'alfa' | 'beta' | 'gama'): BankResultView {
+  const result = completedSimulationView().results.find((each) => each.bankId === bankId);
+  if (!result) throw new Error(`no ${bankId} in completedSimulationView`);
+  return result;
 }
 
 export const BANK_CATALOG: BankCatalogView = {

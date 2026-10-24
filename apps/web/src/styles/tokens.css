@@ -14,6 +14,7 @@
   --space-8: 2rem;
 
   --radius: 0.5rem;
+  --text-width: 44rem; /* longest comfortable line for running text */
   --control-height: 2.75rem; /* 44 px: comfortable touch target */
 
   --color-bg: #f5f7fa;
@@ -35,6 +36,7 @@
   --color-warning-bg: #fffaeb;
   --color-info: #0b5cad;
   --color-info-bg: #eff6ff;
+  --color-neutral-bg: #eef1f4; /* --color-muted on it: 5.9:1 */
 
   --focus-ring: 0 0 0 3px #2f81f7;
 }

@@ -1,7 +1,9 @@
+/* Wider than the form, so three cards fit side by side. The boxes take the row's width; long
+   text inside them keeps a readable line (--text-width). */
 .page {
   display: grid;
   gap: var(--space-4);
-  max-width: 44rem;
+  max-width: 64rem;
   margin: 0 auto;
   padding: var(--space-6) var(--space-4) var(--space-8);
 }
@@ -23,4 +25,34 @@
   border-left: 4px solid var(--color-warning);
   border-radius: var(--radius);
   background: var(--color-warning-bg);
+}
+
+/* Empty, out of the grid flow (no extra gap) but not display: none, which would take the alert
+   region out of the accessibility tree and make its next text a region born with text. */
+.notice:empty {
+  position: absolute;
+}
+
+.notFound {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.banks {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+}
+
+/* One column on a phone, up to three on a desktop. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-4);
+  padding: 0;
+  list-style: none;
 }
