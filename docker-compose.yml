@@ -1,0 +1,41 @@
+services:
+  mock-banks:
+    build:
+      context: .
+      target: mock-banks
+
+  api:
+    build:
+      context: .
+      target: api
+    environment:
+      BANK_ALFA_URL: http://mock-banks:4001
+      BANK_BETA_URL: http://mock-banks:4002
+      BANK_GAMA_URL: http://mock-banks:4003
+      # Forced bank scenarios, e.g. BANK_GAMA_EXTRA_HEADERS='{"x-mock-scenario":"error"}'.
+      # Empty by default; the API treats an empty variable as unset.
+      BANK_ALFA_EXTRA_HEADERS: ${BANK_ALFA_EXTRA_HEADERS:-}
+      BANK_BETA_EXTRA_HEADERS: ${BANK_BETA_EXTRA_HEADERS:-}
+      BANK_GAMA_EXTRA_HEADERS: ${BANK_GAMA_EXTRA_HEADERS:-}
+    volumes:
+      - api-data:/data
+    # No depends_on on mock-banks: the API starts without the banks, and their cards show
+    # "Indisponível" until they are up.
+    # Docker's default, written down because the API's shutdown budget is sized for it
+    # (DOCKER_STOP_GRACE_MS and HARD_STOP_MS, apps/api/src). Raising it here alone changes nothing.
+    stop_grace_period: 10s
+    healthcheck:
+      # Database only, never the banks (GET /health). Slim images have no curl: Node's fetch.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
+
+volumes:
+  api-data:

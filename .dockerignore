@@ -1,0 +1,26 @@
+# Patterns without **/ match only at the root of the build context.
+
+# Rebuilt inside the image
+**/node_modules
+**/dist
+**/coverage
+apps/api/src/generated
+
+# Local data and secrets
+apps/api/data
+**/*.db
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
+**/.env
+**/.env.*
+
+# Not needed by any image (and editing them should not invalidate the build cache)
+.git
+.claude
+CLAUDE.local.md
+**/*.md
+docs
+Dockerfile
+docker-compose.yml
+.dockerignore
