@@ -34,6 +34,31 @@ front passam no healthcheck. Só a porta 8080 fica aberta no host: o nginx serve
 Para parar, `docker compose down`. O banco SQLite fica num volume e sobrevive; `docker compose
 down -v` apaga os dados.
 
+## Smoke test
+
+Confere o sistema no ar de ponta a ponta: lê o catálogo (`GET /banks`), cria uma simulação com o
+cliente fictício dos testes (nenhum dado pessoal real), acompanha o resultado por até 30 s e valida
+cada resposta pelos schemas do `shared`. Termina com código 0 quando passa e 1 quando falha,
+dizendo em qual passo e por quê. Com o compose no ar, de duas formas:
+
+```bash
+npm run smoke
+```
+
+```bash
+docker compose --profile smoke run --rm smoke
+```
+
+A primeira usa o Node da máquina (depois do `npm install`) e chama `http://localhost:8080/api`,
+passando pelo nginx; `SMOKE_BASE_URL` troca o endereço (no modo de desenvolvimento,
+`http://localhost:5173/api`). A segunda roda o mesmo script num container, só com Docker.
+
+Um banco reprovar, ficar indisponível ou devolver erro não reprova o smoke, porque os bancos
+simulados sorteiam falhas. Ele falha quando o sistema falha: resposta fora do schema, simulação
+que não termina no prazo, banco ainda pendente no fim, bancos diferentes dos do catálogo ou
+nenhum banco com resposta de fato (aprovação ou reprovação), sinal de que os bancos simulados
+podem nem ter subido.
+
 ## Como rodar em desenvolvimento
 
 Cada comando abaixo roda num terminal próprio, na raiz do repositório.
