@@ -19,6 +19,21 @@ um de cada vez.
   Desktop ou sem o WSL 2, o motor do Docker não sobe e o `docker compose` não consegue conectar.
 - **Para o modo de desenvolvimento:** Node 24 ou mais recente.
 
+## Como rodar com Docker
+
+Na raiz do repositório:
+
+```bash
+docker compose up -d --build --wait
+```
+
+Depois, acesse **<http://localhost:8080>**. O `--wait` só devolve o terminal quando a API e o
+front passam no healthcheck. Só a porta 8080 fica aberta no host: o nginx serve o front e repassa
+`/api/` para a API, e a API e os bancos simulados ficam só na rede interna do compose.
+
+Para parar, `docker compose down`. O banco SQLite fica num volume e sobrevive; `docker compose
+down -v` apaga os dados.
+
 ## Como rodar em desenvolvimento
 
 Cada comando abaixo roda num terminal próprio, na raiz do repositório.
@@ -321,3 +336,29 @@ Hoje o front só entende `Retry-After` em segundos, que é o formato que a API e
 data, a espera seria calculada contra o relógio do navegador, que pode estar minutos errado. A
 evolução é converter a data com a diferença entre o relógio do servidor (o header `Date` da própria
 resposta) e o do navegador, a mesma correção já usada no tempo decorrido.
+
+## Limitações
+
+### Rate limit contra IP forjado: uma camada só
+
+O rate limit conta as requisições por IP do cliente (padrão: 10 POSTs por minuto). Atrás do
+nginx, a API lê esse IP do `X-Forwarded-For` (`TRUST_PROXY=true`), e a proteção contra um IP
+forjado nesse cabeçalho depende de duas condições:
+
+- **O nginx sobrescreve o `X-Forwarded-For`** com o endereço que ele viu (`$remote_addr`), em vez
+  de acrescentar. Dois testes provam isso. Pelo nginx do compose, 11 POSTs, cada um com um IP
+  forjado diferente, levam o 11º a 429: o contador é um só. Num nginx que acrescenta
+  (`$proxy_add_x_forwarded_for`), 15 POSTs iguais passam sem nenhum 429, porque cada IP forjado
+  ganha um contador novo.
+- **O nginx é o único caminho até a API:** a porta dela não é publicada no host. Quem chegasse
+  direto poderia mandar qualquer `X-Forwarded-For`.
+
+Uma segunda camada seria a API confiar só no IP do nginx (`trustProxy` com o endereço dele).
+Confiar na sub-rede inteira do compose não adiantaria: o nginx vê o host como o gateway dessa
+mesma rede. Seria preciso fixar uma sub-rede e o IP do nginx no compose, e uma sub-rede fixa pode
+colidir com redes já existentes na máquina de quem roda o projeto; por isso ficou de fora. Em
+produção, a lista de proxies confiáveis viria da infraestrutura.
+
+Confiar num número de saltos (`trustProxy: 1`) não é alternativa: o Fastify (5.12.7, a versão
+usada) desativou essa opção porque ela não confere quem é o vizinho imediato, e um cliente que
+chegasse direto à API forjaria o IP.
