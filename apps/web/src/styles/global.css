@@ -33,6 +33,12 @@ select {
   box-shadow: var(--focus-ring);
 }
 
+/* Headings take the focus only on route changes, for screen readers (App.tsx). They are not
+   controls, so no ring around the title. */
+h1[tabindex='-1']:focus-visible {
+  box-shadow: none;
+}
+
 /* Read by screen readers, not shown. */
 .visually-hidden {
   position: absolute;

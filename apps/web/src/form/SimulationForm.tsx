@@ -143,7 +143,8 @@ export function SimulationForm({ catalog, onRetryCatalog, onCreated }: Simulatio
         onSubmit={(event) => void handleSubmit(event)}
       >
         <header className={styles.header}>
-          <h1 id="form-title" className={styles.title}>
+          {/* tabIndex: receives the focus when the route changes (App.tsx). */}
+          <h1 id="form-title" tabIndex={-1} className={styles.title}>
             Simule seu empréstimo consignado
           </h1>
           <p className={styles.intro}>

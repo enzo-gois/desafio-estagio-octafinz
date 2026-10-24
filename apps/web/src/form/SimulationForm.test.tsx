@@ -197,7 +197,7 @@ describe('validation', () => {
 });
 
 describe('submission', () => {
-  it('sends the parsed input with the consent version from GET /banks, then opens the result', async () => {
+  it('sends the parsed input with the consent version from GET /banks, then opens its result', async () => {
     const api = createFakeApi();
     const { user } = renderApp({ api });
     await fillValidForm(user);
@@ -205,8 +205,8 @@ describe('submission', () => {
     await user.click(submitButton());
 
     expect(api.createSimulation).toHaveBeenCalledWith(INPUT, expect.any(AbortSignal));
-    expect(await screen.findByRole('heading', { name: 'Resultado da simulação' })).toBeVisible();
-    expect(screen.getByText(`Simulação ${SIMULATION_ID} enviada aos bancos.`)).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Resultado da simulação' })).toHaveFocus();
+    expect(api.getSimulation).toHaveBeenCalledWith(SIMULATION_ID, expect.any(AbortSignal));
   });
 
   it('sends once when submitted twice before the first answer', async () => {

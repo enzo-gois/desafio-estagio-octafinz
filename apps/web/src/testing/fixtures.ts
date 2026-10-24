@@ -68,6 +68,22 @@ export function simulationView(overrides: Partial<SimulationView> = {}): Simulat
   };
 }
 
+/** The same simulation once no bank is PENDING: Gama did not answer in time. */
+export function completedSimulationView(overrides: Partial<SimulationView> = {}): SimulationView {
+  const { results } = simulationView();
+  return simulationView({
+    status: 'COMPLETED_WITH_OFFERS',
+    retryable: true,
+    serverTime: '2026-10-23T12:00:09.000Z',
+    results: results.map((result) =>
+      result.status === 'PENDING'
+        ? { bankId: result.bankId, bankName: result.bankName, status: 'UNAVAILABLE', attempts: 3 }
+        : result,
+    ),
+    ...overrides,
+  });
+}
+
 export const BANK_CATALOG: BankCatalogView = {
   consentVersion: CONSENT_VERSION,
   banks: [
