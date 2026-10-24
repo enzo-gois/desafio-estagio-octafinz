@@ -1,3 +1,4 @@
+import { MAX_RETRY_AFTER_MS } from '@simulador/shared';
 import { describe, expect, it } from 'vitest';
 import { ConfigError } from '../banks/bank-config';
 import { loadAppConfig } from './env';
@@ -53,6 +54,18 @@ describe('loadAppConfig', () => {
     ['an invalid bank setting', { BANK_ALFA_URL: 'ftp://alfa' }],
   ])('fails at boot on %s', (_, env) => {
     expect(() => loadAppConfig(env)).toThrow(ConfigError);
+  });
+
+  it('accepts a rate-limit window of up to MAX_RETRY_AFTER_MS', () => {
+    const config = loadAppConfig({ RATE_LIMIT_WINDOW_MS: String(MAX_RETRY_AFTER_MS) });
+
+    expect(config.http.rateLimit.windowMs).toBe(MAX_RETRY_AFTER_MS);
+  });
+
+  it("refuses a longer window, saying why: its 429s would ask for more than the front's ceiling", () => {
+    expect(() => loadAppConfig({ RATE_LIMIT_WINDOW_MS: String(MAX_RETRY_AFTER_MS + 1) })).toThrow(
+      `RATE_LIMIT_WINDOW_MS: deve ser no máximo ${MAX_RETRY_AFTER_MS} ms (MAX_RETRY_AFTER_MS, do shared)`,
+    );
   });
 
   it('reports every invalid variable at once', () => {

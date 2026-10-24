@@ -1,6 +1,7 @@
 import {
   bankCatalogViewSchema,
   CONSENT_VERSION,
+  MAX_RETRY_AFTER_MS,
   STALE_CONSENT_MESSAGE,
   simulationViewSchema,
 } from '@simulador/shared';
@@ -42,7 +43,8 @@ async function setup(
     corsOrigins: [FRONT],
     trustProxy: false,
     banks: BANKS,
-    rateLimit: { postMax: options.postMax ?? 100, getMax: 1_000, windowMs: 60_000 },
+    // The longest window env.ts allows.
+    rateLimit: { postMax: options.postMax ?? 100, getMax: 1_000, windowMs: MAX_RETRY_AFTER_MS },
     createSimulation: new CreateSimulation({
       repository,
       starter: fakeStarter(options.accepting ?? true),
@@ -151,6 +153,10 @@ describe('POST /simulations', () => {
 
     expect(third.statusCode).toBe(429);
     expect(third.json()).toEqual({ message: HTTP_MESSAGES.RATE_LIMITED });
+    // Even with the longest window, the Retry-After stays within the front's ceiling.
+    const retryAfterMs = Number(third.headers['retry-after']) * 1_000;
+    expect(retryAfterMs).toBeGreaterThan(0);
+    expect(retryAfterMs).toBeLessThanOrEqual(MAX_RETRY_AFTER_MS);
   });
 
   it('logs the simulationId and no personal data', async () => {

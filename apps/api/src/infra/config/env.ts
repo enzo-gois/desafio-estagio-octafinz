@@ -1,3 +1,4 @@
+import { MAX_RETRY_AFTER_MS } from '@simulador/shared';
 import { z } from 'zod';
 import type { ShutdownOptions } from '../../application/simulation-orchestrator';
 import type { MarginPolicy } from '../../domain/margin';
@@ -15,7 +16,7 @@ const PENDING_TTL_SLACK_MS = 10_000;
 const emptyAsUndefined = (value: unknown) =>
   typeof value === 'string' && value.trim() === '' ? undefined : value;
 
-const intVar = (fallback: number, min: number, max: number) =>
+const intVar = (fallback: number, min: number, max: number, maxMessage?: string) =>
   z.preprocess(
     emptyAsUndefined,
     z
@@ -23,7 +24,7 @@ const intVar = (fallback: number, min: number, max: number) =>
       .trim()
       .regex(/^\d+$/, 'deve ser um número inteiro')
       .transform(Number)
-      .pipe(z.number().min(min).max(max))
+      .pipe(z.number().min(min).max(max, maxMessage))
       .default(fallback),
   );
 
@@ -67,7 +68,14 @@ const envSchema = z.object({
   ),
   RATE_LIMIT_POST_MAX: intVar(10, 1, 10_000),
   RATE_LIMIT_GET_MAX: intVar(120, 1, 100_000),
-  RATE_LIMIT_WINDOW_MS: intVar(60_000, 1_000, 3_600_000),
+  // A 429's Retry-After lasts until the window ends, and the front waits at most
+  // MAX_RETRY_AFTER_MS: with a longer window it would poll again while still limited.
+  RATE_LIMIT_WINDOW_MS: intVar(
+    60_000,
+    1_000,
+    MAX_RETRY_AFTER_MS,
+    `deve ser no máximo ${MAX_RETRY_AFTER_MS} ms (MAX_RETRY_AFTER_MS, do shared): o Retry-After do 429 dura até o fim da janela, e o front não espera mais que isso`,
+  ),
   MARGIN_PERCENT: intVar(35, 1, 100),
   MARGIN_REFERENCE_MONTHLY_RATE: z.preprocess(
     emptyAsUndefined,
