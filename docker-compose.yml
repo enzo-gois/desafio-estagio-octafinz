@@ -58,5 +58,17 @@ services:
       start_period: 10s
       start_interval: 1s
 
+  # Smoke test with Docker only: docker compose --profile smoke run --rm smoke
+  # The profile keeps it out of `up`. No depends_on: it tests whatever stack is running, and
+  # says so when there is none.
+  smoke:
+    profiles: [smoke]
+    build:
+      context: .
+      target: smoke
+    environment:
+      # Through nginx, like the browser: the /api proxy is part of what is tested.
+      SMOKE_BASE_URL: http://web:8080/api
+
 volumes:
   api-data:

@@ -88,3 +88,10 @@ COPY apps/web/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY apps/web/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=web-build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 8080
+
+# --- Smoke test: scripts/smoke.ts against the running stack (compose profile "smoke") --------
+# Built on deps, where tsx and the shared package already are. A test tool, never deployed.
+FROM deps AS smoke
+COPY . .
+USER node
+CMD ["node_modules/.bin/tsx", "scripts/smoke.ts"]
