@@ -1,7 +1,78 @@
 # Simulador de Empréstimo Consignado
 
-> README em construção: instruções de execução, arquitetura e variáveis de ambiente serão
-> consolidadas na etapa 7. Esta seção registra as decisões de projeto tomadas até aqui.
+> README em construção: docker-compose, arquitetura e a lista completa de variáveis de ambiente
+> serão consolidados na etapa 7.
+
+![Formulário enviado; os cards dos bancos chegam um a um, o Banco Gama fica indisponível e o resumo oferece "Simular novamente"](docs/images/fluxo-resultado.gif)
+
+Simulação enviada pelo formulário numa janela de 800 px (por isso, cards em duas colunas), contra a
+API e os bancos simulados reais: o Banco Alfa responde
+em cerca de 1 s, o Beta em 3 s e o Gama, forçado a falhar (`x-mock-scenario: error`, 503 com
+`Retry-After`), fica indisponível depois da nova tentativa. Só para a gravação, a latência do Beta
+foi elevada (`BETA_LATENCY_MIN_MS=2000`, `BETA_LATENCY_MAX_MS=2500`), para que os cards cheguem
+um de cada vez.
+
+## Como rodar em desenvolvimento
+
+Requer Node 24 ou mais recente. Cada comando abaixo roda num terminal próprio, na raiz do
+repositório.
+
+```bash
+npm install                                # também gera o client do Prisma
+npm run db:migrate -w @simulador/api       # cria o SQLite em apps/api/data
+npm run dev -w @simulador/mock-banks       # bancos simulados nas portas 4001, 4002 e 4003
+npm run dev -w @simulador/api              # API na porta 3000
+npm run dev -w @simulador/web              # front em http://localhost:5173
+```
+
+O front chama a API em `/api`, na própria origem. Em desenvolvimento, o servidor do Vite repassa
+`/api/*` para `API_PROXY_TARGET` (padrão `http://localhost:3000`), sem o prefixo; em produção, um
+proxy reverso faz o mesmo. Por isso não há CORS no caminho e o `Retry-After` das respostas fica
+legível. `VITE_API_URL` troca a base (padrão `/api`) e é lida no build.
+
+### Forçar cenários dos bancos
+
+A API envia headers extras a um banco quando recebe `BANK_<ID>_EXTRA_HEADERS` (JSON). Com o header
+`x-mock-scenario`, o banco simulado responde o cenário pedido em vez de sortear:
+
+```bash
+BANK_GAMA_EXTRA_HEADERS='{"x-mock-scenario":"error"}' npm run dev -w @simulador/api
+```
+
+| `x-mock-scenario` | O banco simulado                                   | O card mostra                                                 |
+| ----------------- | -------------------------------------------------- | ------------------------------------------------------------- |
+| `ok`              | responde pela regra fictícia dele                  | Aprovado, Contraproposta ou Não aprovado                      |
+| `timeout`         | não responde dentro do orçamento                   | Indisponível: "O banco não respondeu a tempo."                |
+| `error`           | Alfa 500; Beta 502 em HTML; Gama 503 + Retry-After | Alfa: Erro na resposta. Beta e Gama: Indisponível, após retry |
+| `malformed`       | JSON quebrado                                      | Erro na resposta: "O banco retornou uma resposta inválida."   |
+| `invalid-shape`   | JSON válido, fora do contrato do banco             | Erro na resposta: "O banco retornou uma resposta inválida."   |
+
+O log da API distingue os dois últimos ("bank sent malformed JSON" e "bank response does not
+match its contract", com o campo que falhou). Sem o header, os bancos simulados sorteiam falhas
+por `<BANCO>_FAILURE_RATE` (e `GAMA_MALFORMED_RATE`) e a latência por `<BANCO>_LATENCY_MIN_MS` e
+`<BANCO>_LATENCY_MAX_MS`.
+
+A contraproposta não precisa de cenário: o Banco Beta só atende servidores públicos e aposentados
+do INSS e, quando a parcela não cabe em 35% do salário, oferece o maior valor que cabe.
+
+### Capturas
+
+**Simulação A** (salário de R$ 800,00, servidor público, R$ 10.000,00 em 48 parcelas, Gama
+forçado a `error`): Alfa reprova por margem, Beta faz contraproposta, Gama fica indisponível. Com
+uma única oferta não há selo "Menor taxa", e o aviso de margem aparece porque a parcela estimada
+não cabe.
+
+![Simulação A no desktop](docs/images/simulacao-a-desktop.jpg)
+
+<p>
+  <img src="docs/images/simulacao-a-celular-1.jpg" alt="Simulação A no celular: resumo e aviso de margem" width="280">
+  <img src="docs/images/simulacao-a-celular-2.jpg" alt="Simulação A no celular: cards dos bancos" width="280">
+</p>
+
+**Simulação B** (salário de R$ 5.000,00, mesmo pedido): Alfa e Beta aprovam o valor integral; o
+selo "Menor taxa" vai para o Beta (1,59% contra 1,79% ao mês).
+
+![Simulação B no desktop](docs/images/simulacao-b-desktop.jpg)
 
 ## Decisões de projeto
 
@@ -147,3 +218,80 @@ Se muitos clientes recebem o mesmo `Retry-After: 2` ao mesmo tempo, todos voltam
 segundos depois e podem derrubar o banco de novo. A melhoria é somar um pequeno jitter ao valor
 pedido (por exemplo, até 10% a mais), **nunca menos** que o `Retry-After`, para respeitar o banco
 e ainda assim espalhar as tentativas.
+
+### Front-end (etapa 6)
+
+- **Sem bibliotecas de formulário nem de requisição.** O formulário tem estado próprio: no
+  react-hook-form, as máscaras exigiriam `Controller` em metade dos campos, e o schema do shared
+  valida o `SimulationInput`, não o estado da tela. O polling é um hook próprio: o
+  `refetchInterval` do TanStack Query é um `setInterval`, e aqui a regra é nunca ter duas
+  requisições em andamento. Estilo com CSS Modules e tokens (`tokens.css`), sem biblioteca de
+  componentes: a acessibilidade fica no código do projeto, não dentro de uma dependência.
+- **Máscaras que espelham o shared.** CPF e CNPJ aceitam só o que o shared aceita (CNPJ
+  alfanumérico, maiúsculas só em `a-z`). Dinheiro é digitado em centavos e formatado sem passar
+  por float: divisão de `BigInt` e uma string decimal entregue ao `Intl`.
+- **Cliente da API que nunca rejeita.** Cada chamada devolve um resultado discriminado (`ok`,
+  `validation`, `rate-limited`, `unavailable`, `not-found`, `network`, `unexpected` ou `aborted`),
+  como o `BankProvider` faz com os bancos. Toda resposta passa pelo schema do shared; o que não
+  passa vira `unexpected`.
+- **Polling encadeado.** Cada resposta agenda a próxima consulta, então nunca há duas ao mesmo
+  tempo e uma resposta lenta adia a seguinte em vez de empilhar requisições. Espera: 1 s no caminho
+  normal; 1, 2, 4 e 8 s após falhas seguidas; com `Retry-After` (429 ou o 503 do desligamento), o
+  valor pedido, com piso de 1 s e teto de `MAX_RETRY_AFTER_MS` (veja abaixo). O polling para
+  quando nenhum banco está `PENDING` ou num 404. Ao sair da página, o timer é cancelado e a
+  requisição em andamento é abortada.
+- **Uma falha no polling não apaga o resultado.** Em erro de rede, 5xx, 429 ou resposta inválida,
+  a tela mantém o último estado e mostra um aviso neutro ("Não foi possível atualizar o resultado
+  agora. Tentando novamente…"): num 429 ou num 5xx a conexão do cliente está boa, e o aviso não
+  deve culpá-la.
+- **Cards por banco, na ordem da API, com o nome vindo dela.** Cada estado tem cor, ícone e texto
+  (Aguardando resposta, Aprovado, Contraproposta, Não aprovado, Indisponível, Erro na resposta):
+  nenhum depende só de cor. A contraproposta tem destaque próprio ("R$ X de R$ Y pedidos"), e o
+  motivo que a API dá (`reason`) aparece sempre que vier.
+- **Selo "Menor taxa" só no fim e com duas ofertas ou mais.** Durante a consulta, o `bestOffer`
+  é a melhor oferta até aquele momento; mostrar o selo antes faria ele pular de banco quando um
+  mais lento responde. Com uma única oferta não há o que comparar.
+- **Resumo: "não" é diferente de "não sei".** A frase só afirma o que as respostas dos bancos
+  sustentam, e o link de volta ao formulário muda conforme o caso:
+
+  | Situação                                    | Resumo                                                                                                          | Link                      |
+  | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------- |
+  | Consultando                                 | "Consultando os bancos: 2 de 3 responderam."                                                                    | —                         |
+  | Duas ofertas ou mais                        | "2 ofertas recebidas. A menor taxa é do Banco Beta."                                                            | Ajustar e simular de novo |
+  | Uma oferta                                  | "1 oferta recebida, do Banco Beta."                                                                             | Ajustar e simular de novo |
+  | Sem ofertas, algum banco reprovou           | "Nenhum banco aprovou o pedido."                                                                                | Ajustar e simular de novo |
+  | Algum banco sem resposta, nos 3 casos acima | O texto do caso + "Nem todos os bancos responderam: simular novamente pode trazer a resposta dos que faltaram." | Simular novamente         |
+  | Nenhum banco respondeu                      | "Nenhum banco respondeu. Simular novamente pode trazer as respostas."                                           | Simular novamente         |
+  | Simulação inexistente ou expirada (404)     | "Simulação não encontrada ou expirada."                                                                         | Fazer uma nova simulação  |
+
+  "Simular novamente" fica em destaque porque os mesmos dados podem trazer a resposta dos bancos
+  que faltaram; quando todos responderam, repetir os dados daria a mesma resposta, por isso o
+  convite é para ajustar.
+
+- **Leitor de tela.** Uma região `aria-live` existe vazia desde o primeiro render (uma região que
+  nasce junto com o texto não é anunciada). Ela anuncia o resumo na primeira resposta, cada banco
+  que responde ("Banco Beta: contraproposta.") e, no fim, o resumo. O contador de segundos fica
+  fora dela. O aviso de falha é `role="alert"` e, vazio, nunca usa `display: none`, que o tiraria
+  da árvore de acessibilidade. Ao trocar de rota, o foco vai para o `<h1>` da página.
+- **Rascunho só em memória.** "Simular novamente" volta ao formulário preenchido, mas pede o
+  consentimento de novo, e nada é gravado no navegador: CPF e salário não ficam no `localStorage`.
+
+### Proposta implementada: teto único para o Retry-After
+
+`MAX_RETRY_AFTER_MS` (60 s), no `packages/shared`, é a fonte única do maior `Retry-After` aceito.
+O front nunca espera mais que isso entre duas consultas, e a API recusa no boot uma
+`RATE_LIMIT_WINDOW_MS` maior, porque o `Retry-After` de um 429 dura até o fim da janela. Assim, um
+`Retry-After` legítimo da nossa API nunca é cortado, em qualquer configuração; o teto só corta
+valores que não vieram dela (um proxy mal configurado, por exemplo).
+
+O teto também protege o `setTimeout`: acima de 2³¹ − 1 ms, ou com `Infinity`, o timer dispara na
+hora, e o polling entraria em loop justamente contra um servidor que pediu para esperar. Um teste
+da rota roda com a janela máxima e confere que o `Retry-After` enviado pelo `@fastify/rate-limit`
+cabe no teto.
+
+### Proposta planejada: Retry-After em data HTTP
+
+Hoje o front só entende `Retry-After` em segundos, que é o formato que a API envia. Em formato de
+data, a espera seria calculada contra o relógio do navegador, que pode estar minutos errado. A
+evolução é converter a data com a diferença entre o relógio do servidor (o header `Date` da própria
+resposta) e o do navegador, a mesma correção já usada no tempo decorrido.
