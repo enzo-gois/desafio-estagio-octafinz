@@ -7,7 +7,7 @@ import { createLogger } from './http/logger-options';
 import { BANK_CATALOG, createBankProviders } from './infra/banks/registry';
 import { type AppConfig, loadAppConfig } from './infra/config/env';
 import { systemClock } from './infra/http/clock';
-import { createPrismaClient } from './infra/persistence/prisma-client';
+import { createPrismaClient, prismaHealthCheck } from './infra/persistence/prisma-client';
 import { PrismaSimulationRepository } from './infra/persistence/prisma-simulation-repository';
 
 // Exit on our own just before docker's SIGKILL (10 s after SIGTERM) if something hangs.
@@ -52,6 +52,7 @@ try {
     trustProxy: config.http.trustProxy,
     rateLimit: config.http.rateLimit,
     banks: BANK_CATALOG,
+    health: prismaHealthCheck(prisma),
     createSimulation: new CreateSimulation({
       repository,
       starter: orchestrator,

@@ -26,7 +26,13 @@ afterEach(async () => {
 });
 
 async function setup(
-  options: { postMax?: number; accepting?: boolean; failingGet?: boolean } = {},
+  options: {
+    postMax?: number;
+    getMax?: number;
+    accepting?: boolean;
+    failingGet?: boolean;
+    failingDatabase?: boolean;
+  } = {},
 ) {
   const lines: string[] = [];
   const logger = createLogger('info', { write: (line: string) => lines.push(line) });
@@ -44,7 +50,16 @@ async function setup(
     trustProxy: false,
     banks: BANKS,
     // The longest window env.ts allows.
-    rateLimit: { postMax: options.postMax ?? 100, getMax: 1_000, windowMs: MAX_RETRY_AFTER_MS },
+    rateLimit: {
+      postMax: options.postMax ?? 100,
+      getMax: options.getMax ?? 1_000,
+      windowMs: MAX_RETRY_AFTER_MS,
+    },
+    health: {
+      checkDatabase: options.failingDatabase
+        ? () => Promise.reject(new Error('SQLITE_CANTOPEN at /secret/path'))
+        : () => Promise.resolve(),
+    },
     createSimulation: new CreateSimulation({
       repository,
       starter: fakeStarter(options.accepting ?? true),
@@ -229,6 +244,36 @@ describe('GET /banks', () => {
         { id: 'gama', name: 'Banco Gama', sharedFields: ['cpf', 'employerCnpj'] },
       ],
     });
+  });
+});
+
+describe('GET /health', () => {
+  it('answers 200 with no-store and writes no request log', async () => {
+    const { app, lines } = await setup();
+    const response = await app.inject({ method: 'GET', url: '/health' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: 'ok' });
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(lines).toEqual([]);
+  });
+
+  it('answers 503 without internals and logs the error when the database fails', async () => {
+    const { app, lines } = await setup({ failingDatabase: true });
+    const response = await app.inject({ method: 'GET', url: '/health' });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ status: 'unavailable' });
+    expect(response.body).not.toContain('/secret/path');
+    expect(lines.join('\n')).toContain('health check failed: database');
+  });
+
+  it('is not rate limited', async () => {
+    const { app } = await setup({ getMax: 1 });
+
+    for (let i = 0; i < 3; i++) {
+      expect((await app.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200);
+    }
   });
 });
 

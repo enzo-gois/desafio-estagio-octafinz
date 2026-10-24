@@ -4,8 +4,10 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import type { BankDescriptor } from '../application/ports/bank-catalog';
+import type { HealthCheck } from '../application/ports/health-check';
 import { errorHandler, HTTP_MESSAGES } from './errors';
 import { bankRoutes } from './routes/banks';
+import { healthRoutes } from './routes/health';
 import { type SimulationRoutesOptions, simulationRoutes } from './routes/simulations';
 
 export interface AppOptions extends SimulationRoutesOptions {
@@ -15,6 +17,8 @@ export interface AppOptions extends SimulationRoutesOptions {
   trustProxy: boolean;
   /** Served by GET /banks for the consent text. */
   banks: readonly BankDescriptor[];
+  /** Used by GET /health (container healthcheck). */
+  health: HealthCheck;
 }
 
 const BODY_LIMIT_BYTES = 16 * 1024;
@@ -54,6 +58,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     // Read once per form load, like a GET of the polling: the same generous limit.
     rateLimit: { max: options.rateLimit.getMax, windowMs: options.rateLimit.windowMs },
   });
+  await app.register(healthRoutes, { health: options.health });
 
   return app;
 }

@@ -1,4 +1,5 @@
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+import type { HealthCheck } from '../../application/ports/health-check';
 import { PrismaClient } from '../../generated/prisma/client';
 
 export type { PrismaClient };
@@ -13,4 +14,13 @@ export async function createPrismaClient(databaseUrl: string): Promise<PrismaCli
   });
   await prisma.$queryRawUnsafe('PRAGMA journal_mode = WAL');
   return prisma;
+}
+
+/** The database answers a trivial query: the file is open and readable. */
+export function prismaHealthCheck(prisma: PrismaClient): HealthCheck {
+  return {
+    checkDatabase: async () => {
+      await prisma.$queryRaw`SELECT 1`;
+    },
+  };
 }

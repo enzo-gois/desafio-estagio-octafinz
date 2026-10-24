@@ -3,8 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, describe } from 'vitest';
-import { createPrismaClient, type PrismaClient } from './prisma-client';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { HealthCheck } from '../../application/ports/health-check';
+import { createPrismaClient, type PrismaClient, prismaHealthCheck } from './prisma-client';
 import { PrismaSimulationRepository } from './prisma-simulation-repository';
 import { simulationRepositoryContract } from './simulation-repository.contract';
 
@@ -24,6 +25,7 @@ describe('PrismaSimulationRepository (SQLite)', () => {
   const databaseUrl = `file:${join(directory, 'test.db').replaceAll('\\', '/')}`;
   let prisma: PrismaClient | undefined;
   let repository: PrismaSimulationRepository;
+  let health: HealthCheck;
 
   beforeAll(async () => {
     try {
@@ -40,6 +42,7 @@ describe('PrismaSimulationRepository (SQLite)', () => {
     }
     prisma = await createPrismaClient(databaseUrl);
     repository = new PrismaSimulationRepository(prisma);
+    health = prismaHealthCheck(prisma);
   }, SETUP_TIMEOUT_MS);
 
   afterAll(async () => {
@@ -50,4 +53,8 @@ describe('PrismaSimulationRepository (SQLite)', () => {
   });
 
   simulationRepositoryContract(() => repository);
+
+  it('passes the health check while the database is open', async () => {
+    await expect(health.checkDatabase()).resolves.toBeUndefined();
+  });
 });
