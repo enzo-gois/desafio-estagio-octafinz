@@ -13,6 +13,12 @@ import { simulationRepositoryContract } from './simulation-repository.contract';
 const API_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const PRISMA_CLI = join(API_ROOT, 'node_modules', 'prisma', 'build', 'index.js');
 
+// `migrate deploy` starts a separate Node process (CLI load, schema engine): ~1.5 s on its own,
+// but past Vitest's default 10 s hook timeout when the machine is busy, e.g. right after the
+// whole unit suite. A timed-out hook keeps running, so afterAll then deletes a directory whose
+// SQLite file is still open, and Windows answers EPERM: a second failure caused by the first.
+const SETUP_TIMEOUT_MS = 60_000;
+
 describe('PrismaSimulationRepository (SQLite)', () => {
   const directory = mkdtempSync(join(tmpdir(), 'simulador-db-'));
   const databaseUrl = `file:${join(directory, 'test.db').replaceAll('\\', '/')}`;
@@ -34,12 +40,13 @@ describe('PrismaSimulationRepository (SQLite)', () => {
     }
     prisma = await createPrismaClient(databaseUrl);
     repository = new PrismaSimulationRepository(prisma);
-  });
+  }, SETUP_TIMEOUT_MS);
 
   afterAll(async () => {
     // Optional chaining: if beforeAll failed, report that failure only, not a second one here.
     await prisma?.$disconnect();
-    rmSync(directory, { recursive: true, force: true });
+    // Retries: on Windows a file closed a moment ago may still be locked (EPERM/EBUSY).
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   });
 
   simulationRepositoryContract(() => repository);
