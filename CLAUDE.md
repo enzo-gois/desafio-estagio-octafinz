@@ -40,22 +40,36 @@ type BankResult = {
   attempts?: number;   // tentativas HTTP; 0 = circuito aberto, nenhuma chamada feita
 } & ({ status: 'APPROVED'; offer: Offer } | { status: Exclude<BankResultStatus, 'APPROVED'> });
 
+// context.simulationId compõe o Idempotency-Key (simulationId:bankId) e o correlation id dos logs.
+interface BankCallContext { simulationId: string }
+
 interface BankProvider {
   readonly id: string;
   // Nunca rejeita: falha vira UNAVAILABLE (não respondeu) ou ERROR (respondeu errado).
-  // context.simulationId compõe o Idempotency-Key (simulationId:bankId) e o correlation id dos logs.
-  simulate(
-    input: SimulationInput,
-    signal: AbortSignal,
-    context: { simulationId: string },
-  ): Promise<BankResult>;
+  // Cancelado com um BankCallAbort como motivo, devolve UNAVAILABLE com o customerMessage dele
+  // como reason (ex.: no desligamento).
+  simulate(input: SimulationInput, signal: AbortSignal, context: BankCallContext): Promise<BankResult>;
 }
 
-// Registro de bancos (infra/banks/registry.ts): displayName + <BANCO>_SHARED_FIELDS do adapter.
+// ports/bank-catalog.ts. O registro (infra/banks/registry.ts) monta o BANK_CATALOG na ordem de
+// BANK_IDS: displayName + <BANCO>_SHARED_FIELDS do adapter, na ordem dos campos do formulário.
 interface BankDescriptor {
-  id: string;
-  displayName: string;
-  sharedFields: SimulationDataField[];   // exatamente os campos do SimulationInput que o adapter envia
+  readonly id: string;
+  readonly displayName: string;
+  readonly sharedFields: readonly SimulationDataField[]; // exatamente os campos que o adapter envia
+}
+
+// Uma linha por banco; gravação condicional: o primeiro resultado final vence.
+interface SimulationRepository {
+  create(simulation: NewSimulation): Promise<void>;        // a simulação e um PENDING por banco, atômico
+  findById(id: string): Promise<StoredSimulation | undefined>;
+  completeBankResult(simulationId: string, result: FinalBankResult): Promise<boolean>; // false: já não era PENDING
+  expirePending(cutoff: Date, reason: string, filter?: { simulationId: string }): Promise<number>;
+}
+
+// GET /health (healthcheck do container): só as dependências da própria API, nunca os bancos.
+interface HealthCheck {
+  checkDatabase(): Promise<void>;        // rejeita se o banco de dados não responde a um SELECT 1
 }
 
 // GET /banks: o que o formulário mostra no consentimento, antes de existir simulação.
@@ -64,7 +78,9 @@ interface BankCatalogView {
   banks: { id: string; name: string; sharedFields: SimulationDataField[] }[];
 }
 
-// GET /simulations/:id. Sem autenticação (o UUID é a chave): nada pessoal além do CPF mascarado.
+// GET /simulations/:id. Sem autenticação (o UUID é a chave): o que a API calcula não revela o
+// salário (da margem, só fitsMargin), mas os resultados dos bancos (ex.: a contraproposta) permitem
+// inferi-lo; limitação registrada no README.
 interface SimulationView {
   id: string;
   createdAt: string;
